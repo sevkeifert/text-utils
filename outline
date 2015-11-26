@@ -1,0 +1,495 @@
+#!/usr/bin/env perl
+
+use strict;
+use POSIX;
+use Text::Wrap;
+use Getopt::Std;
+#use Data::Dumper;
+
+###############################################################################
+# about
+###############################################################################
+
+sub about {
+
+  print "
+This is a command line tool for creating text outlines from space-delimited
+markup.  This program transforms a stream of data, either rendering markup or
+decoding an already rendered outline back into markup.
+
+                                                    Kevin Seifert - 2015 GPLv2
+USAGE
+
+    Pipe space-delimited (or space-delimited) text into this script to create a
+    text outline.  For example:
+
+        cat your_markup_file | $0
+
+OPTIONS
+
+    -d    decode outline
+    -e    encode outline (default)
+    -h    help
+    -n    use numeric style: 1  1.1  1.2 ...
+    -r    re-encode existing outline (repair)
+    -w    set word wrap width
+    -0    mix single/double space (add break after continued lines)
+    -1    single space
+    -2    double space
+
+EXAMPLE USAGE
+
+    cat yourfile | outline       # for roman numeral format
+    cat yourfile | outline -n    # for decimal format
+    cat yourfile | outline -d    # decode rendered outline back into markup
+    cat yourfile | outline -r    # repair (re-encode) rendered outline
+
+    Or in vim, visually select text and run selection markup through pipe
+
+        :'<,'> ! outline
+        :'<,'> ! outline -d
+        :'<,'> ! outline -r
+
+MARKUP EXAMPLE
+
+    INPUT EXAMPLE (WHITESPACE DETERMINES LEVEL)
+
+        some heading
+            more text
+                a sub point
+                another sub point
+            more text
+                a sub point
+                another sub point
+
+    OUTPUT EXAMPLE (RENDERED INTO OUTLINE)
+
+        I. some heading
+            A. more text
+                1. a sub point
+                2. another sub point
+            B. more text
+                1. a sub point
+                2. another sub point
+
+    ALSO, YOU CAN USE DECIMAL FORMAT USING THE -n FLAG
+
+        1. some heading
+            1.1 more text
+                1.1.1 a sub point
+                1.1.2 another sub point
+            1.2 more text
+                1.2.1 a sub point
+                1.2.2 another sub point
+
+";
+}
+
+
+###############################################################################
+# config settings
+###############################################################################
+
+$Text::Wrap::unexpand = 0; # don't convert space to hard tabs
+$Text::Wrap::columns=79; # global word wrap size
+my $pre = '';  # for decorating outline marker: __I.
+my $post= ' '; # for decorating outline marker: I.__
+
+# be careful on changing fixed tab widths (these are used in math below).
+# convert hard tabs to spaces. tab formatting is inconsistent in display.
+my $tab_width_global = 4; # safe to increase as value [4, 5, ...)
+my $tab = ' ' x $tab_width_global;
+my $wrap_offset = 3; # how much to pad wrapped text. must be < tab_width_global
+
+my $eol = "\n";
+my $eol_outline = $eol x 1; # single/double spacing default for outlines
+my $eol_mixed = 1; # add double space after continued lines
+
+my @counter = (0); # track tree position
+
+# formatting constants
+my $alphas = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+my @letters = split(//,$alphas);
+my @r100   = ('','C','CC','CCC','CD','D','DC','DCC','DCCC','CM');
+my @r10    = ('','X','XX','XXX','XL','L','LX','LXX','LXXX','XC');
+my @r1     = ('','I','II','III','IV','V','VI','VII','VIII','IX');
+
+
+###############################################################################
+# stream parser state
+###############################################################################
+
+# use line-by-line stream encoding and decoding (for lower memory use).
+# these vars maintain the state for processing streams.
+
+# encoder state
+my $encode_max_levels = 1;
+my $encode_level = 0;
+my $encode_level_old = -1;
+my $encode_indent_raw_old = '';
+my $encode_tab_width_local = 1; # what is size of tab char(s)?
+my $encode_indent_global = ''; # is the entire block indented?
+my $encode_found_width = 0; # token found
+my $encode_found_global = 0; # indent token found
+my $encode_indent_global_size = 0; # size of global padding (chars)
+
+# decoder state
+my $decode_level = 0;
+my $decode_tab_width_local = $tab_width_global;
+my $decode_found_width = 0; # indent token found
+my $decode_found_global = 0;
+my $decode_indent_global_size = 0;
+my $decode_indent_global = '';
+my $decode_indent_raw_old = '';
+my $decode_line = '';
+
+
+###############################################################################
+# main
+###############################################################################
+
+#parse command line args
+my $options = {};
+getopts("012dehnrw:", $options);
+#print Dumper($options);
+
+if ( $options->{w} ) {
+  $Text::Wrap::columns=int($options->{w}); # global word wrap size
+}
+
+if ( $options->{'0'} ) {
+  $eol_mixed = 1;
+} elsif ( $options->{'1'} ) {
+  $eol_outline = $eol;
+  $eol_mixed = 0;
+} elsif ( $options->{'2'} ) {
+  $eol_outline = $eol x 2;
+  $eol_mixed = 0;
+}
+
+if ( $options->{h} ) {
+  exit about(0);
+} elsif ( $options->{d} ) {
+  decode();
+} elsif ( $options->{r} ) {
+  recode($options->{n});
+} else {
+  encode($options->{n});
+}
+
+###############################################################################
+# number formating functions
+###############################################################################
+
+# 1, 2, 3 -> I, II, III
+sub get_upper_roman {
+    my $num = shift;
+    my ($ones,$tens,$hundreds) = split(//, reverse $num);
+    my $ret = ('M' x int($num/1000))
+             . $r100[$hundreds] . $r10[$tens] . $r1[$ones];
+    return $ret;
+}
+
+# 1, 2, 3 -> i, ii, iii
+sub get_lower_roman {
+    my $num = shift;
+    return lc(get_upper_roman($num));
+}
+
+# 1, 2, 3 -> A, B, C
+sub get_upper_alpha {
+    my $num = shift;
+    my $num = $num - 1;
+    my $numchars = scalar(@letters);
+    my $ret = ( $letters[$num % $numchars] x (int($num/$numchars) + 1));
+    return $ret;
+}
+
+# 1, 2, 3 -> a, b, c
+sub get_lower_alpha {
+    my $num = shift;
+    return lc(get_upper_alpha($num));
+}
+
+# main function for roman numeral outline
+# gets the number/letter for any given level.  for example:
+#   I. A. 1.
+sub get_number_traditional {
+  my $level = shift;
+  my $num = shift;
+
+  if ( $level == 0 ) {
+    return get_upper_roman( $num ) . '.';
+  } elsif ( $level == 1 ) {
+    return get_upper_alpha( $num ) . '.';
+  } elsif ( $level == 2 ) {
+    return $num . '.';
+  } elsif ( $level == 3 ) {
+    return get_lower_alpha( $num ) . '.';
+  } elsif ( $level == 4 ) {
+    return get_lower_roman( $num ) . '.';
+
+  } elsif ( $level == 5 ) {
+    return get_upper_roman( $num ) . ')';
+  } elsif ( $level == 6 ) {
+    return get_upper_alpha( $num ) . ')';
+  } elsif ( $level == 7 ) {
+    return $num . ')';
+  } elsif ( $level == 8 ) {
+    return get_lower_alpha( $num ) . ')';
+  } elsif ( $level == 9 ) {
+    return get_lower_roman( $num ) . ')';
+
+  } elsif ( $level == 10 ) {
+    return '(' . get_upper_roman( $num ) . ')';
+  } elsif ( $level == 11 ) {
+    return '(' . get_upper_alpha( $num ) . ')';
+  } elsif ( $level == 12 ) {
+    return '(' . $num . ')';
+  } elsif ( $level == 13 ) {
+    return '(' . get_lower_alpha( $num ) . ')';
+  } elsif ( $level == 14 ) {
+    return '(' . get_lower_roman( $num ) . ')';
+
+  } else {
+    return '((' . $num . '))'; # too many levels
+  }
+}
+
+# return Wittgenstein-style marker for any given.  for example:
+#   1.2.4
+sub get_number_decimal {
+  my $level = shift;
+  my $num = shift;
+  my @tmp = ();
+  for ( my $i = 0 ; $i <= $level; $i ++ ) {
+    push( @tmp, $counter[$i]);
+  }
+  if (@tmp == 1) {
+    push (@tmp, '');  # end with .
+    #push (@tmp, '0'); # end with .0
+  }
+  return join('.',@tmp);
+}
+
+
+###############################################################################
+# stream encoder
+###############################################################################
+
+# render tab-delimited markup to outline
+sub encode {
+  my $format_decimal = shift || 0;
+  while (<STDIN>) {
+    chomp();
+	print encode_stream($_,$format_decimal);
+  }
+}
+
+
+# process markup, line by line (for lower memory use)
+sub encode_stream {
+
+  my $raw = shift || '';
+  my $format_decimal = shift || 0;
+
+  my $ret = '';
+
+  # tabs can mess up formatting. avoid.
+  $raw =~ s/\t/$tab/g;
+
+  # split indentation and content
+  $raw =~ /^(\s*)(.*)/;
+  my @parts = ($1, $2);
+  my $indent_raw = $parts[0]; # may contain extra padding
+  my $content = $parts[1];
+  if ( $content eq '' ) {
+    # found empty line skip
+    return $ret;
+  }
+
+  # is all the markup indented?  if so don't count padding in level.
+  if ( ! $encode_found_global ) {
+    $encode_indent_global = $indent_raw;
+    $encode_indent_raw_old = $indent_raw;
+    $encode_found_global = 1;
+    $encode_indent_global_size = length($encode_indent_global);
+  }
+
+  # what is the width of first tab change?
+  if ( ! $encode_found_width ) {
+    if ( $encode_found_global && $indent_raw ne $encode_indent_raw_old  ) {
+      $encode_tab_width_local = length($indent_raw) - length($encode_indent_raw_old) || 1;
+      $encode_found_width = 1;
+    }
+    $encode_indent_raw_old = $indent_raw;
+  }
+
+  # calculate tab change
+  if ( $encode_found_width ) {
+    # get indent change, minus any global indentation
+    my $indent_change = substr($indent_raw, $encode_indent_global_size);
+    my $tab_space_size = length($indent_change);
+    $encode_level = int($tab_space_size / $encode_tab_width_local);
+  }
+
+  $counter[$encode_level]++;
+  if ( $encode_level > $encode_max_levels ) {
+      $encode_max_levels = $encode_level;
+  }
+  if ( $encode_level < $encode_level_old ) {
+    # dropped back down, reset upper counters
+    for (my $i = $encode_level + 1; $i <= $encode_max_levels; $i++ ) {
+      $counter[$i] = 0;
+    }
+  }
+
+  # format function
+  my $f = \&get_number_traditional;
+  if ($format_decimal) {
+    $f = \&get_number_decimal;
+  }
+  my $number = $f->($encode_level,$counter[$encode_level]);
+
+  # preserve same encode_level of indent
+  my $tabs = $tab x $encode_level;
+  my $indent_all = $encode_indent_global . $tabs;
+
+  my $heading = $pre . $number . $post; # eg: " I. "
+  my $pad1 = $indent_all . $heading;
+  #my $pad2 = $indent_all . ' ' x length($heading); # dynamic (avoid)
+  my $pad2 = $indent_all . ' ' x $wrap_offset; # save space
+
+  my $out = wrap($pad1, $pad2, $content);
+
+  if ( $eol_mixed ) {
+    if (length($out) > $Text::Wrap::columns) { # text has wrapped
+		$eol_outline = $eol x 2;
+	} else {
+		$eol_outline = $eol x 1;
+	}
+  }
+
+  $ret = $out . $eol_outline;
+
+  $encode_level_old = $encode_level;
+
+  return $ret;
+}
+
+
+###############################################################################
+# stream decoder
+###############################################################################
+
+# parse outline into space-delimited markup
+# decode stream in stdin
+sub decode {
+  while (<STDIN>) {
+    chomp();
+    my $raw = $_;
+	print decode_stream($raw);
+  }
+  print decode_flush();
+}
+
+
+# line by line decoding (for lower memory use)
+sub decode_stream {
+
+  my $raw = shift || '';
+  my $ret = '';
+
+  # tabs can mess up formatting. avoid.
+  $raw =~ s/\t/$tab/g;
+
+  $raw =~ /^(\s*)(.*)/;
+  my @parts = ($1, $2);
+
+  my $indent_raw = $parts[0];
+  my $content = $parts[1];
+
+  if ( $content eq '' ) {
+    # found empty line skip
+    return $ret;
+  }
+
+  # is all the markup indented?  if so don't count padding in level.
+  if ( ! $decode_found_global ) {
+    $decode_indent_global = $indent_raw;
+    $decode_indent_raw_old = $indent_raw;
+    $decode_found_global = 1;
+    $decode_indent_global_size = length($decode_indent_global);
+  }
+
+  # what is the width of first tab change?
+  if ( ! $decode_found_width ) {
+    if ( $decode_found_global && $indent_raw ne $decode_indent_raw_old  ) {
+      $decode_tab_width_local = length($indent_raw) - length($decode_indent_raw_old) || 1;
+      $decode_found_width = 1;
+    }
+    $decode_indent_raw_old = $indent_raw;
+  }
+
+  # get indent change, minus any global indentation.
+  # the only tricky part is knowing if we are in the same block or new block.
+  # note above, the continued line will never be an even multiple of the
+  # tab width since the continued block is indented 2 spaces (never 4).
+
+  my $indent_change = substr($indent_raw, $decode_indent_global_size);
+  my $tab_space_size = length($indent_change);
+
+  my $levelf = $tab_space_size / $decode_tab_width_local;
+  $decode_level = int($levelf);
+  my $continued = ceil($levelf-$decode_level); # 0 or 1
+
+  if ( ! $continued ) {
+    # found clean boundary, flush buffer
+	$ret = decode_flush();
+
+    # start new line # strip off header
+    $content =~ s/^\S* +//;
+    $decode_line = $indent_raw . $content;
+
+  } else {
+
+    # remove padding, append
+    $content =~ s/^ +| +$//;
+    $decode_line .= ' ' . $content;
+  }
+
+  return $ret;
+}
+
+
+# pop data off decode buffer
+sub decode_flush {
+  my $ret = '';
+  if ( $decode_line ne '' ) {
+    $ret = $decode_line . $eol;
+    $decode_line = '';
+  }
+  return $ret;
+}
+
+
+###############################################################################
+# stream re-coder
+###############################################################################
+
+# outline -> tab-delimited markup -> outline
+# repair outline formatting
+sub recode {
+  my $format_decimal = shift || 0;
+  my $line = '';
+  while (<STDIN>) {
+    chomp();
+    my $raw = $_;
+	$line = decode_stream($raw);
+	print encode_stream($line,$format_decimal);
+  }
+  $line = decode_flush();
+  print encode_stream($line,$format_decimal);
+}
+
+
