@@ -26,15 +26,17 @@ if len( sys.argv ) > 2:
 if len( sys.argv ) > 3:
 	c = int( sys.argv[ 3 ] )
 
-deltas = [(-1, 0),  ( 1, 0), (0, 1), (0, -1)]
+deltas = [(-1, 0), (1, 0), (0, 1), (0, -1)]
 
 def shift(l, n):
 	return l[n:] + l[:n]
 
-# set preference
+# get adjacent cells
 def get_paths (x, y):
 	global deltas, c
 	d = []
+
+    # prefer same delta?
 	if randint( 0, 100 ) < c:
 		deltas = shift(deltas,1)
 
