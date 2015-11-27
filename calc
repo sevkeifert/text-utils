@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# a simple one-line shell calculator
+# eg:
+#     calc "1+1"
+# 2
+
+echo "scale = 8; $1" | bc
+
