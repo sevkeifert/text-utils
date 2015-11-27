@@ -16,7 +16,7 @@ import sys
 # default grid size 
 w = 19
 h = 20 
-c = 50  # curvy-ness
+c = 50  # curvy-ness [0 - 100]
 
 # read grid size from args if available
 if len( sys.argv ) > 2:
