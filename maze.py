@@ -36,7 +36,7 @@ def get_paths (x, y):
 	global deltas, c
 	d = []
 
-    # prefer same delta?
+	# prefer same delta?
 	if randint( 0, 100 ) < c:
 		deltas = shift(deltas,1)
 
