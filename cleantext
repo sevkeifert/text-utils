@@ -1,0 +1,34 @@
+#!/bin/perl
+
+# This script is for cleaning up text that was typed and copied from MS Word.
+# This script translates Mcrosoft Word characters (such as "smart" quotes)
+# into standard ASCII characters.  All other non-standard MS chars are removed.  
+# 
+# Example:
+#
+#   cat YOUR_TEXT.txt | cleantext
+
+sub clean_text {
+  my $body = shift;
+
+  # map ms chars to ascii char
+  # add more here if needed.  prefix hex numbers with 0x
+  my @from = (0, 13, 145, 146, 147, 148, 150, 151, 160, 194  ); 
+  my @to   = ('', "\n", "'", "'", '"', '"', ' -- ', '--', ' ', '' ); 
+  my $idx = 0;
+  foreach my $code (@from) { 
+    my $f = chr($code);
+    my $t = $to[$idx]; 
+    $body =~ s/$f/$t/g;
+    $idx++;
+  }
+
+  # all other chars are dropped
+  $body =~ s/[^\s\n[:print:]]+//g;
+  return $body;
+} 
+
+while (<STDIN>) { 
+  print clean_text($_);
+}
+
