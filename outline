@@ -211,9 +211,10 @@ sub get_lower_alpha {
     return lc(get_upper_alpha($num));
 }
 
-# main function for roman numeral outline
-# gets the number/letter for any given level.  for example:
-#   I. A. 1.
+# main function for roman numeral outline.
+# gets the number/letter for any given level and number.
+# for example:
+#   I.,  A.,  1.
 sub get_number_traditional {
   my $level = shift;
   my $num = shift;
@@ -435,7 +436,7 @@ sub decode_stream {
   # get indent change, minus any global indentation.
   # the only tricky part is knowing if we are in the same block or new block.
   # note above, the continued line will never be an even multiple of the
-  # tab width since the continued block is indented 2 spaces (never 4).
+  # tab width since the continued block is indented 3 spaces (never 4).
 
   my $indent_change = substr($indent_raw, $decode_indent_global_size);
   my $tab_space_size = length($indent_change);
