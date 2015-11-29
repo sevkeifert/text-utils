@@ -18,7 +18,7 @@ outline
 > Create and parse text outlines from simple markup.  Supports roman numeral (I. A. 1. a.) and decimal formats(1 1.1 1.1.1).  Written in Perl.
 
 maze.py 
-> Draws a basic ASCII maze.  Accepts width, heigth and difficulty parameters.
+> Draws a basic ASCII maze.  Accepts width, height and difficulty parameters.
 
 maze-ify-ascii.py
 > This script turns an ASCII tessellation into a maze.
