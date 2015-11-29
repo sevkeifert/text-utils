@@ -18,8 +18,13 @@
 # 
 # COMMAND LINE USAGE:
 #
-#    maze-ify-ascii.py -f YOUR_TEMPLATE    
-#   # (or just import the mazify class and generate your template on the fly.)
+#
+#    # create a maze from an ASCII template file
+#    maze-ify-ascii.py -f YOUR_TEMPLATE
+#
+#    # generate a simple square maze (no template)
+#    maze-ify-ascii.py -m -W 10 -H 10
+#    (or import the mazify class and generate your tessellation on the fly)
 # 
 # OPTIONS:
 #
@@ -27,55 +32,58 @@
 #    -d    enable debug
 #    -t    max wall thickness (hint for scanner)
 #    -z    allow zigzag (diagonal) scanning - experimental
+#    -m	   Draw a simple square maze
+#          -W    width 
+#          -H    height
 # 
 # TEMPLATE EXAMPLES:
 #
 # example input (ascii template)
 # 
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
-#	|   |   |   |   |   |   |   |   |   |   |   |   |   |
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
-#	|   |   |   |   |   |   |   |   |   |   |   |   |   |
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
-#	|   |   |   |   |   |   |   |   |   |   |   |   |   |
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
-#	|   |   |   |   |   |   |   |   |   |   |   |   |   |
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
 #
 # example output (maze-ified!)
 #
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
-#	|               |               |           |       |
-#	+---+---+---+   +---+---+   +   +---+---+   +   +   +
-#	|       |           |       |               |   |   |
-#	+   +   +---+---+   +---+   +---+---+---+   +   +---+
-#	|   |   |                   |       |       |       |
-#	+   +   +---+---+---+---+---+   +   +   +---+---+   +
-#	|   |                           |                   |
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   |               |               |           |       |
+#   +---+---+---+   +---+---+   +   +---+---+   +   +   +
+#   |       |           |       |               |   |   |
+#   +   +   +---+---+   +---+   +---+---+---+   +   +---+
+#   |   |   |                   |       |       |       |
+#   +   +   +---+---+---+---+---+   +   +   +---+---+   +
+#   |   |                           |                   |
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
 #
 #
 # You can also use irregularly shaped rooms, including holes.
 #
 # example input
 #
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
-#	|               |   |   |   |   |   |   |   |   |   |
-#	|               |---+---+---+---+---+---+---+---+---+
-#	|               |   |   |   |   |   |   |   |   |   |
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
-#	|   |   |   |   |   |   |   |   |   |   |   |   |   |
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   |               |   |   |   |   |   |   |   |   |   |
+#   |               |---+---+---+---+---+---+---+---+---+
+#   |               |   |   |   |   |   |   |   |   |   |
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
 #
 # example ouput 
 #
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
-#	|               |               |                   |
-#	|               |   +---+---+   +   +---+---+---+   +
-#	|               |       |       |   |           |   |
-#	+   +---+---+---+---+   +---+   +   +   +   +---+   +
-#	|                       |           |   |           |
-#	+---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
+#   |               |               |                   |
+#   |               |   +---+---+   +   +---+---+---+   +
+#   |               |       |       |   |           |   |
+#   +   +---+---+---+---+   +---+   +   +   +   +---+   +
+#   |                       |           |   |           |
+#   +---+---+---+---+---+---+---+---+---+---+---+---+---+
 #
 
 from random import shuffle
@@ -89,7 +97,7 @@ class mazeify:
 		self.deltas = [(1,0),(0,1),(-1,0),(0,-1)] # possible moves
 
 		if scan_diagonal:
-			# scan for diagonal patterns - experimental and not tested much :)
+			# scan diagonal patterns - experimental and not tested much :)
 			self.deltas = [(1,1),(-1,1),(1,-1),(-1,-1)] + self.deltas
 
 		self.walls = ['/','\\','_','|','-','+','#'] # allowed wall boundaries
@@ -178,10 +186,13 @@ class mazeify:
 	# find a random starting place for a walk
  	def findStartPoint(self):
 		# aim for middle.
-		for y in xrange(len(self.board)/2, len(self.board)-1):
-			for x in xrange(len(self.board[y])/2,len(self.board[y])-1):
+		h = len(self.board)-1
+		w = len(self.board[h/2])-1
+		for y in xrange(h/2, h):
+			for x in xrange(w/2,w):
 				c = self.get(x,y)
 				if c == self.unvisited: 
+					#print "start at " , (x,y)
 					return (x,y)
 
 		# bugger that... just pick the first.
@@ -256,6 +267,22 @@ class mazeify:
 					self.walk(x2,y2,level+1)
 
 
+	# basic ASCII templates for standard mazes below...
+
+	# produce wxh square grid
+	def tessellate_square(self,w,h):
+		ver = "|   " * w + '|'
+		hor = "+---" * w + '+' 
+		s = ''
+		for i in xrange(h):
+			s += hor + '\n'
+			s += ver + '\n'
+		s += hor + '\n'
+		return s
+
+
+# end class
+
 					
 if __name__ == '__main__':
 
@@ -265,8 +292,9 @@ if __name__ == '__main__':
 
 		templates = []
 	
-		# basic grid
 		template = r'''
+    Example: a basic grid
+
 		+---+---+---+---+---+---+---+---+---+---+---+---+---+
 		|   |   |   |   |   |   |   |   |   |   |   |   |   |
 		+---+---+---+---+---+---+---+---+---+---+---+---+---+
@@ -285,8 +313,8 @@ if __name__ == '__main__':
 		'''
 		templates.append(template)
 
-		# with holes
 		template = r'''
+    Example: irregular cells, holes
 
 		+---+---+---+---+---+---+---+---+---+---+---+---+---+
 		|               |   |   |   |   |   |   |   |   |   |
@@ -302,8 +330,8 @@ if __name__ == '__main__':
 		templates.append(template)
 
 
-		# hexagonal, with protected whitespace
 		template = r"""
+    Example: hexagonal maze, with protected whitespace
 
 		```+--+------+--+------+--+------+--+------+--+`
 		``/    \    /    \    /    \    /    \    /    \`
@@ -339,8 +367,8 @@ if __name__ == '__main__':
 
 		templates.append(template)
 
-		# oblique, with protected whitespace
 		template = r'''
+    Example: oblique, with protected whitespace
 
                  `+---+---+---+---+---+---+---+---+---+---+---+`
                 `/   /   /   /   /   /   /   /   /   /   /   /`
@@ -367,10 +395,10 @@ if __name__ == '__main__':
 		templates.append(template)
 
 
-		# note: mixed tessellations are possible
 		template = r"""
+    Example: mixed tessellations are also possible
 
-	Salvidor Dali Melting Maze:
+    Salvidor Dali Melting Maze:
 	
               ``````````````     ```````````````````````````````
               `+---+---+---+-----+--+------+--+------+--+```````
@@ -414,8 +442,9 @@ if __name__ == '__main__':
 
 
 
-		# irregular shape, multiple regions, text, holes, protected whitespace
 		template = r'''
+    Example: irregular, multiple regions, text, holes, protected whitespace
+
 ```````````````````````````````````+---+---+---+---+````````````````````````
 ```````````````````````````````````|   |   |   |   |````````````````````````
 ```````````````````````````+---+---+---+---+---+---+---+---+````````````````
@@ -456,12 +485,11 @@ if __name__ == '__main__':
 
 		# with text
 		template = r"""
-
-       Help Mr. Food Travel Through the Intestines ;-)
-
-   start
-          \``````````````````````````````````
-  `\       \```````____````````____``````````````
+```````Help`Mr.`Food`Travel`Through`the`Intestines`;-)
+``````````````````````````````````````````````````````
+```start``````````````````````````````````````````````
+``````````\``````````````````````````````````
+```\```````\```````____````````____``````````````
    `\       \____/      \____/      \____``````````
     `\      /    \      /    \      /    \```````````
     ``\____/      \____/      \____/      \____```````
@@ -495,6 +523,7 @@ if __name__ == '__main__':
 		
 		templates.append(template)
 
+		print "Here's a quick demo using templates\n"
 		maze = mazeify()
 		for template in templates:
 			print "input template:"
@@ -508,7 +537,7 @@ if __name__ == '__main__':
 			print out
 
 
-	# parse a file and display
+	# parse a template file and display maze
 	def parse_file(options):
 		scan_diagonal=options.zigzag
 		maze = mazeify(scan_diagonal=scan_diagonal)
@@ -519,16 +548,31 @@ if __name__ == '__main__':
 		print out
 
 
+	# create basis maze
+	def create_maze(options):
+		maze = mazeify()
+		template = maze.tessellate_square(options.width, options.height)
+		maze.parseTemplate(template)
+		out = maze.toString()
+		print out
+
+
 	# parse cli options 
 	parser = optparse.OptionParser()
 	parser.add_option('-f', '--file', action='store', dest='filename', help='ASCII template file', default='') 
 	parser.add_option('-d', '--debug', action='store_true', dest='debug', help='enable debug', default=False) 
 	parser.add_option('-t', '--thickness', action='store', type="int", dest='thickness', help='wall thickness', default=1) 
 	parser.add_option('-z', '--zigzag', action='store_true', dest='zigzag', help='allow diagonal scanning', default=False) 
+	parser.add_option('-W', '--width', action='store', dest='width', type="int", help='width', default=20) 
+	parser.add_option('-H', '--height', action='store', dest='height', type="int", help='height', default=20) 
+	parser.add_option('-m', '--maze', action='store_true', dest='maze', help='create a basic maze.', default=False) 
+
 	options, args = parser.parse_args()
 
 	if options.filename != '':
 		parse_file(options)
+	elif options.maze:
+		create_maze(options)
 	else:
 		demo()
 
