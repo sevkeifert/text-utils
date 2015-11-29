@@ -4,20 +4,31 @@
 # 
 # This script turns an ASCII tessellation into a maze.
 # 
-# NOTES: 
+# NOTES ON TEMPLATES: 
 # 
-# You must use a delimiter (or char change) at the edge of each wall segment.
-# For example, in the templates below, '+' is the delimiter.
+# You should use a delimiter (or char change) at the edge of each wall segment.
+# For example, in the template examples below, the '+' is the delimiter.
 # Otherwise, the parser doesn't know where the wall segment ends or begins.
 # 
 # Also, be careful on using _ (underscore) in your template.  
 # It looks like mostly whitespace, but it is a solid wall for the entire cell.
+#
+# Use the self.visited char (`) to prevent scanner from traversing whitespace.
+# For example, to prevent the parser from puncturing a wall to outside a shape.
 # 
-# USAGE:
+# COMMAND LINE USAGE:
 #
 #	maze-ify-ascii.py -f YOUR_TEMPLATE	
+#   # (or just import the mazify class and generate your template on the fly.)
 # 
-# EXAMPLES:
+# OPTIONS:
+#
+#	-f    ASCII template file
+#	-d    enable debug
+#	-t    max wall thickness (hint for scanner)
+#	-z    allow zigzag (diagonal) scanning - experimental
+# 
+# TEMPLATE EXAMPLES:
 #
 # example input (ascii template)
 # 
@@ -73,12 +84,12 @@ import optparse
 
 class mazeify:
 
-	def __init__(self, allow_diagonal=False):
+	def __init__(self, scan_diagonal=False):
 
 		self.board = [[]] # char array for maze
 		self.deltas = [(1,0),(0,1),(-1,0),(0,-1)] # possible moves
 
-		if allow_diagonal:
+		if scan_diagonal:
 			# scan for diagonal patterns - experimental and not tested much :)
 			self.deltas = [(1,1),(-1,1),(1,-1),(-1,-1)] + self.deltas
 
@@ -86,8 +97,8 @@ class mazeify:
 		self.corners = ['+'] # protect corner, prevent path from passing through
 		self.space = ' ' # empty path (for display)
 		self.unvisited = ' ' # any cell that is unvisited
-		self.visited = "'" # flag where we have walked.
-		self.thickness = '`' # max thickness of wall 
+		self.visited = '`' # flag where we have walked.
+		self.thickness = 1 # max thickness of wall 
 		self.debug = False # verbose debugging
 	
 	# parse an ASCII tesellation to be used as basis of maze
@@ -333,7 +344,7 @@ if __name__ == '__main__':
 		 '''
 		templates.append(template)
 
-
+		# hexagonal, with protected whitespace
 		template = """
 
 		'''+--+------+--+------+--+------+--+------+--+'
@@ -370,6 +381,7 @@ if __name__ == '__main__':
 
 		templates.append(template)
 
+		# oblique, with protected whitespace
 		template = '''
 
                  '+---+---+---+---+---+---+---+---+---+---+---+'
@@ -396,6 +408,45 @@ if __name__ == '__main__':
 
 		templates.append(template)
 
+		# with text
+		template = r"""
+
+       Help Mr. Food Travel Through the Intestines ;-)
+
+   start
+          \``````````````````````````````````
+  `\       \```````____````````____``````````````
+   `\       \____/      \____/      \____``````````
+    `\      /    \      /    \      /    \```````````
+    ``\____/      \____/      \____/      \____```````
+    ``/    \      /    \      /    \      /    \`````````
+    `/      \____/      \____/      \____/      \`````````
+    `\      /    \      /    \      /    \      /`````````
+    ``\____/      \____/      \____/      \____/```````````
+    ``/    \      /    \      /    \      /    \````````````
+    `/      \____/      \____/      \____/      \____```````
+    `\      /    \      /    \      /    \      /    \````````
+    ``\____/      \____/      \____/      \____/      \____``
+    ``/    \      /    \      /    \      /    \      /    \`
+    `/      \____/      \____/      \____/      \____/      \`
+    `\      /    \      /    \      /    \      /    \      /`
+    ``\____/      \____/      \____/      \____/      \____/`
+    ``/    \      /    \      /    \      /    \      /    \`
+    `/      \____/      \____/      \____/      \____/      \`
+    `\      /    \      /    \      /    \      /    \      /`
+    ``\____/      \____/      \____/      \____/      \____/`
+    ``/    \      /    \      /    \      /    \      /    \`
+    `/      \____/      \____/      \____/      \____/      \`
+    `\      /    \      /    \      /    \      /    \      /`
+    ``\____/      \____/      \____/      \____/      \____/`
+    ```````\`     /    \      /    \      /    \      /    \`
+    ````````\____/      \____/      \____/      \____/      \`
+    `````````````\`     /````\      /````\      /````\       \`
+    ``````````````\____/``````\____/``````\____/``````\  end  \`
+    ```````````````````````````````````````````````````\       \`
+"""	
+
+		templates.append(template)
 
 		maze = mazeify()
 		for template in templates:
@@ -412,7 +463,8 @@ if __name__ == '__main__':
 
 	# parse a file and display
 	def parse_file(options):
-		maze = mazeify()
+		scan_diagonal=options.zigzag
+		maze = mazeify(scan_diagonal=scan_diagonal)
 		maze.debug = options.debug	
 		maze.thickness = int(options.thickness)
 		maze.parseTemplateFile(options.filename)
@@ -425,6 +477,7 @@ if __name__ == '__main__':
 	parser.add_option('-f', '--file', action='store', dest='filename', help='ASCII template file', default='') 
 	parser.add_option('-d', '--debug', action='store_true', dest='debug', help='enable debug', default=False) 
 	parser.add_option('-t', '--thickness', action='store', type="int", dest='thickness', help='wall thickness', default=1) 
+	parser.add_option('-z', '--zigzag', action='store_true', dest='zigzag', help='allow diagonal scanning', default=False) 
 	options, args = parser.parse_args()
 
 	if options.filename != '':
