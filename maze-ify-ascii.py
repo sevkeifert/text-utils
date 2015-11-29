@@ -227,6 +227,7 @@ class mazeify:
 				elif scan in self.corners: 
 					finished = True # knicked a corner. ignore.
 				elif scan in self.walls: 
+					wallsize += 1
 					if foundwall and wall != scan:
 						finished = True	# hit another wall
 					if wallsize > self.thickness:
@@ -234,7 +235,6 @@ class mazeify:
 					foundwall = True # inside a wall
 					wall = scan
 					walls.append((x2,y2))
-					wallsize += 1
 				elif foundwall:
 					finished = True # looking through wall
 
