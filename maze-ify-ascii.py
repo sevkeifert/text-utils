@@ -83,9 +83,11 @@ class mazeify:
 			self.deltas = [(1,1),(-1,1),(1,-1),(-1,-1)] + self.deltas
 
 		self.walls = ['/','\\','_','|','-','+','#'] # allowed wall boundaries
+		self.corners = ['+'] # protect corner, prevent path from passing through
 		self.space = ' ' # empty path (for display)
 		self.unvisited = ' ' # any cell that is unvisited
-		self.visited = '`' # flag where we have walked.
+		self.visited = "'" # flag where we have walked.
+		self.thickness = '`' # max thickness of wall 
 		self.debug = False # verbose debugging
 	
 	# parse an ASCII tesellation to be used as basis of maze
@@ -99,7 +101,7 @@ class mazeify:
 
 	# same as parseTemplate but takes a filename
 	def parseTemplateFile(self,filename,x=-1,y=-1):
-		with open (options.file, "r") as myfile:
+		with open (filename, "r") as myfile:
 			template=myfile.read()	 
 		self.parseTemplate(template,x,y)
 
@@ -196,24 +198,34 @@ class mazeify:
 			x2 = x
 			y2 = y
 			foundwall = False	
-			pastwall = False	
+			finished = False	
 			scan = ''
 
 			# look past walls for unvisited rooms 		
 			path = []
 			walls = []
-			while not pastwall:
+			wall = ''
+			wallsize = 0
+			while not finished:
 				x2 += dx # walk in a direction
 				y2 += dy
 				scan = self.get(x2,y2)
 				path.append((x2,y2))
 				if scan ==  '':
-					pastwall = True # dead end
+					finished = True # dead end
+				elif scan in self.corners: 
+					finished = True # knicked a corner. ignore.
 				elif scan in self.walls: 
+					if foundwall and wall != scan:
+						finished = True	# hit another wall
+					if wallsize > self.thickness:
+						finished = True # gone through too many walls 
 					foundwall = True # inside a wall
+					wall = scan
 					walls.append((x2,y2))
+					wallsize += 1
 				elif foundwall:
-					pastwall = True # looking through wall
+					finished = True # looking through wall
 
 			if scan == self.unvisited:
 				# hit paydirt, inside a new room
@@ -321,6 +333,33 @@ if __name__ == '__main__':
 		 '''
 		templates.append(template)
 
+
+		template = '''
+
+                 '+---+---+---+---+---+---+---+---+---+---+---+'
+                '/   /   /   /   /   /   /   /   /   /   /   /'
+               '+---+---+---+---+---+---+---+---+---+---+---+'
+              '/   /   /   /   /   /   /   /   /   /   /   /'
+             '+---+---+---+---+---+---+---+---+---+---+---+'
+            '/   /   /   /   /   /   /   /   /   /   /   /'
+           '+---+---+---+---+---+---+---+---+---+---+---+'
+          '/   /   /   /   /   /   /   /   /   /   /   /'
+         '+---+---+---+---+---+---+---+---+---+---+---+'
+        '/   /   /   /   /   /   /   /   /   /   /   /'
+       '+---+---+---+---+---+---+---+---+---+---+---+'
+      '/   /   /   /   /   /   /   /   /   /   /   /'
+     '+---+---+---+---+---+---+---+---+---+---+---+'
+    '/   /   /   /   /   /   /   /   /   /   /   /'
+   '+---+---+---+---+---+---+---+---+---+---+---+'
+  '/   /   /   /   /   /   /   /   /   /   /   /'
+ '+---+---+---+---+---+---+---+---+---+---+---+'
+'/   /   /   /   /   /   /   /   /   /   /   /'
++---+---+---+---+---+---+---+---+---+---+---+'
+
+		'''
+
+		templates.append(template)
+
 		maze = mazeify()
 		for template in templates:
 			print "input template:"
@@ -335,20 +374,24 @@ if __name__ == '__main__':
 
 
 	# parse a file and display
-	def parse_file(filename):
+	def parse_file(options):
 		maze = mazeify()
-		maze.parseTemplateFile(filename)
+		maze.debug = options.debug	
+		maze.thickness = int(options.thickness)
+		maze.parseTemplateFile(options.filename)
 		out = maze.toString()
 		print out
 
 
 	# parse cli options 
 	parser = optparse.OptionParser()
-	parser.add_option('-f', '--file', action='store', dest='file', help='ASCII template file', default='') 
+	parser.add_option('-f', '--file', action='store', dest='filename', help='ASCII template file', default='') 
+	parser.add_option('-d', '--debug', action='store_true', dest='debug', help='enable debug', default=False) 
+	parser.add_option('-t', '--thickness', action='store', type="int", dest='thickness', help='wall thickness', default=1) 
 	options, args = parser.parse_args()
 
-	if options.file != '':
-		parse_file(options.file)
+	if options.filename != '':
+		parse_file(options)
 	else:
 		demo()
 
