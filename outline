@@ -256,7 +256,8 @@ sub get_number_traditional {
   }
 }
 
-# return Wittgenstein-style marker for any given.  for example:
+# return Wittgenstein-style marker for any given level and number.  
+# for example:
 #   1.2.4
 sub get_number_decimal {
   my $level = shift;
