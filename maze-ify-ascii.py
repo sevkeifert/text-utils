@@ -55,8 +55,7 @@
 #	+---+---+---+---+---+---+---+---+---+---+---+---+---+
 #
 #
-# You can also use irregularly shaped rooms 
-# (which may have more than one solution)
+# You can also use irregularly shaped rooms, including holes.
 #
 # example input
 #
