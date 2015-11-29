@@ -18,15 +18,15 @@
 # 
 # COMMAND LINE USAGE:
 #
-#	maze-ify-ascii.py -f YOUR_TEMPLATE	
+#    maze-ify-ascii.py -f YOUR_TEMPLATE    
 #   # (or just import the mazify class and generate your template on the fly.)
 # 
 # OPTIONS:
 #
-#	-f    ASCII template file
-#	-d    enable debug
-#	-t    max wall thickness (hint for scanner)
-#	-z    allow zigzag (diagonal) scanning - experimental
+#    -f    ASCII template file
+#    -d    enable debug
+#    -t    max wall thickness (hint for scanner)
+#    -z    allow zigzag (diagonal) scanning - experimental
 # 
 # TEMPLATE EXAMPLES:
 #
