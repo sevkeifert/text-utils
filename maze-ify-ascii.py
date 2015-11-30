@@ -171,7 +171,7 @@ class mazeify:
 
 		# what wall directions will be scanned in ASCII template?
 		# note: these are returned by reference
-		if self.scan_diagonal and find in self.walls:
+		if self.scan_diagonal and find in ['/','\\']:
 			deltas = self.zdeltas # break diagonal wall patterns
 		else:
 			deltas = self.deltas # zdelta won't detect X whitespace boundaries
