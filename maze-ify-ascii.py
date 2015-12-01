@@ -31,10 +31,15 @@
 #    -f    ASCII template file
 #    -d    enable debug
 #    -t    max wall thickness (hint for scanner)
-#    -z    allow zigzag (diagonal) scanning - experimental
+#    -z    break diagonal wall patterns - experimental
 #    -m	   Draw a simple square maze
 #          -W    width 
 #          -H    height
+#
+#    --start-x        start scan at x
+#    --start-y        start scan at y
+#    --no-wall-scan   don't scan any space that was previously taken by a wall 
+# 
 # 
 # TEMPLATE EXAMPLES:
 #
@@ -91,22 +96,28 @@ import optparse
 
 class mazeify:
 
-	def __init__(self, scan_diagonal=False):
+	def __init__(self):
 
 		self.board = [[]] # char array for maze
-		self.deltas = [(1,0),(0,1),(-1,0),(0,-1)] # possible moves
+		self.deltas = [(1,0),(0,1),(-1,0),(0,-1)] # scan/fill directions
 
-		if scan_diagonal:
-			# scan diagonal patterns - experimental and not tested much :)
-			self.deltas = [(1,1),(-1,1),(1,-1),(-1,-1)] + self.deltas
-
+		# wall
+		self.scan_wall_space = True # scan from space that was previously wall
 		self.walls = ['/','\\','_','|','-','+','#'] # allowed wall boundaries
 		self.corners = ['+'] # protect corner, prevent path from passing through
+		self.thickness = 1 # max thickness of wall 
+
+		# break diagonal wall patterns - experimental! not tested very much :)
+		self.scan_diagonal = False 
+		self.zdeltas = [(1,1),(-1,1),(1,-1),(-1,-1)] + self.deltas
+
+		# cell flags
 		self.space = ' ' # empty path (for display)
 		self.unvisited = ' ' # any cell that is unvisited
-		self.visited = '`' # flag where we have walked.
-		self.thickness = 1 # max thickness of wall 
+		self.visited = '`' # flag cells where we have walked
+
 		self.debug = False # verbose debugging
+
 	
 	# parse an ASCII tesellation to be used as basis of maze
 	def parseTemplate(self,template,x=-1,y=-1):
@@ -158,7 +169,13 @@ class mazeify:
 			print 'fill pre', x, y, find, replace, level
 			print self.toString(True) 
 
-		deltas = self.deltas
+		# what wall directions will be scanned in ASCII template?
+		# note: these are returned by reference
+		if self.scan_diagonal and find in ['/','\\']:
+			deltas = self.zdeltas # break diagonal wall patterns
+		else:
+			deltas = self.deltas # zdelta won't detect X whitespace boundaries
+
 		if level == 0:
 			data = []
 			if len(find) != len(replace):
@@ -205,7 +222,8 @@ class mazeify:
 	# walk around, knock down walls
 	def walk(self,x=-1,y=-1,level=0):
 
-		deltas = list(self.deltas)
+		deltas = list(self.deltas) # make copy
+
 		shuffle(deltas)
 
 		if level == 0:
@@ -227,6 +245,7 @@ class mazeify:
 			walls = []
 			wall = ''
 			wallsize = 0
+
 			while not finished:
 				x2 += dx # walk in a direction
 				y2 += dy
@@ -245,8 +264,15 @@ class mazeify:
 					foundwall = True # inside a wall
 					wall = scan
 					walls.append((x2,y2))
-				elif foundwall:
-					finished = True # looking through wall
+				elif foundwall: # scan not in self.walls
+					finished = True # scan moved past the wall
+
+			# TODO: _ needs special handling. 
+			# treat as wall/whitespace hybrid.
+			# for example:  _   
+			#              |_|   (contains visual space, but no space char)
+			# 
+			# translate _ to space, with boundary *between* char cells
 
 			if scan == self.unvisited:
 				# hit paydirt, inside a new room
@@ -255,13 +281,27 @@ class mazeify:
 
 				# knock down wall.  note: must use a delimiter/change
 				# or parser won't know where the wall segment boundary ends
+				walls_changed=[]
 				for point in walls:
 					(x3,y3) = point
 					c = self.get(x3,y3)
-					self.fill(x3,y3,c,self.unvisited) # hulk smash!
+					changed = self.fill(x3,y3,c,self.unvisited) # hulk smash!
+					walls_changed += changed
 
 				# claim empty room
 				changed = self.fill(x2,y2,self.unvisited,self.visited)
+
+				# rescan from every newly discovered space.
+				# note: this is re-scanning from inside previous wall-space.
+				# this is intentional (in case walls are staggered).
+				if (x,y) in changed:
+					changed.remove((x,y)) # don't rescan from the initial point
+
+				if not self.scan_wall_space:
+					for point in walls_changed:
+						if point in walls_changed:
+							walls_changed.remove(point) # don't scan wall space 
+
 				for point in changed:
 					(x2,y2) = point
 					self.walk(x2,y2,level+1)
@@ -287,8 +327,8 @@ class mazeify:
 if __name__ == '__main__':
 
 
-	#  simple template demos
-	def demo():
+	#  simple template parsing demos / regression tests
+	def demo(options):
 
 		templates = []
 	
@@ -441,7 +481,53 @@ if __name__ == '__main__':
 		templates.append(template)
 
 
+		# irregular, with text, protected whitespace
+		# be careful with trailing whitespace
+		# can use with the -z diagonal wall flag
+		template = r"""
+```````Help`Mr.`Food`Travel`Through`the`Intestines`;-)
+````````````````````````````````````````````````````````````````
+```start````````````````````````````````````````````````````````
+``````````\`````````````````````````````````````````````````````
+```\```````\```````____````````____`````````````````````````````
+````\       \____/      \____/      \____```````````````````````
+`````\      /    \      /    \      /    \``````````````````````
+``````\____/      \____/      \____/      \____`````````````````
+``````/    \      /    \      /    \      /    \````````````````
+`````/      \____/      \____/      \____/      \```````````````
+`````\      /    \      /    \      /    \      /```````````````
+``````\____/      \____/      \____/      \____/````````````````
+``````/    \      /    \      /    \      /    \````````````````
+`````/      \____/      \____/      \____/      \____```````````
+`````\      /    \      /    \      /    \      /    \``````````
+``````\____/      \____/      \____/      \____/      \____`````
+``````/    \      /    \      /    \      /    \      /    \````
+`````/      \____/      \____/      \____/      \____/      \```
+`````\      /    \      /    \      /    \      /    \      /```
+``````\____/      \____/      \____/      \____/      \____/````
+``````/    \      /    \      /    \      /    \      /    \````
+`````/      \____/      \____/      \____/      \____/      \```
+`````\      /    \      /    \      /    \      /    \      /```
+``````\____/      \____/      \____/      \____/      \____/````
+``````/    \      /    \      /    \      /    \      /    \````
+`````/      \____/      \____/      \____/      \____/      \```
+`````\      /    \      /    \      /    \      /    \      /```
+``````\____/      \____/      \____/      \____/      \____/````
+```````````\`     /    \      /    \      /    \      /    \````
+````````````\____/      \____/      \____/      \____/      \```
+`````````````````\`     /````\      /````\      /````\       \``
+``````````````````\____/``````\____/``````\____/``````\  end  \`
+```````````````````````````````````````````````````````\       \
+````````````````````````````````````````````````````````````````
+"""	
+		templates.append(template)
 
+		# Note: On concave shapes, the scanner will try to connect opposite
+		# sides of the mouth. It just views the gap as another space it is
+		# supposed to cross.  The easiest approach to giving the template the
+		# correct "hints" to parse is (a) explicitly declare all external space
+		# as 'visited' and (b) explicitily punch holes where you want the start
+		# and end openings to be.
 		template = r'''
     Example: irregular, multiple regions, text, holes, protected whitespace
 
@@ -458,13 +544,13 @@ if __name__ == '__main__':
 ```````````````+---+---+---+---+---+```````````+---+---+---+---+---+---+````
 ```````````````````|   |   |   |   |```````````|   |   |   |   |   |   |````
 ```````````````````+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-```````````````````````|   |   |   |   |   |   |   |   |   |   |   |   |   |
+`````start`````````````|   |   |   |   |   |   |   |   |   |   |   |   |   |
 `+---+---+---+`````````+---+---+---+---+---+---+---+---+---+---+---+---+---+
- |   |   |   |`````````````|   |   |   |   |   |   |   |   |   |   |   |   |
+`    |   |   |`````````````|   |   |   |   |   |   |   |   |   |   |   |   |
  +---+---+---+`````````````+---+---+---+---+---+---+---+---+---+---+---+---+
 `|   |   |   |````\`\`\````````|   |   |   |   |   |   |   |   |   |   |   |
 `+---+---+---+````/`/`/````````+---+---+---+---+---+---+---+---+---+---+---+
-`|   |   |   |```````````````  |   |   |   |   |   |   |   |   |   |   |   |
+`|   |   |    `````````````````    |   |   |   |   |   |   |   |   |   |   |
 `+---+---+---+`````````````+---+---+---+---+---+---+---+---+---+---+---+---+
 ```````````````````````````|   |   |   |   |   |   |   |   |   |   |   |   |
 ```````````````````````+---+---+---+---+---+---+---+---+---+---+---+---+---+
@@ -475,61 +561,62 @@ if __name__ == '__main__':
 ```````````````|   |   |   |   |   |   |   |   |   |   |   |   |   |   |````
 ```````````````+---+---+---+---+---+---+---+---+---+---+---+---+---+---+````
 ```````````````````|   |   |   |   |   |   |   |   |   |   |   |   |````````
-```````````````````+---+---+---+---+---+---+---+---+---+---+---+---+````````
-```````````````````````|   |   |   |   |   |   |   |   |   |   |    ````````
-```````````````````````+---+---+---+---+---+---+---+---+---+---+    ```\`\`\
+```````````````````+---+---+---+---+---+---+---+---+---+---+---+   +````````
+```````````````````````|   |   |   |   |   |   |   |   |   |   |````````end`
+```````````````````````+---+---+---+---+---+---+---+---+---+---+```````\`\`\
 ```````````````````````````````|   |   |   |   |   |   |```````````````/`/`/
 ```````````````````````````````+---+---+---+---+---+---+````````````````````
 '''
+
 		templates.append(template)
 
-		# with text
+
+		# TODO: not implemented. requires special handling for _ 
 		template = r"""
-```````Help`Mr.`Food`Travel`Through`the`Intestines`;-)
-``````````````````````````````````````````````````````
-```start``````````````````````````````````````````````
-``````````\``````````````````````````````````
-```\```````\```````____````````____``````````````
-   `\       \____/      \____/      \____``````````
-    `\      /    \      /    \      /    \```````````
-    ``\____/      \____/      \____/      \____```````
-    ``/    \      /    \      /    \      /    \`````````
-    `/      \____/      \____/      \____/      \`````````
-    `\      /    \      /    \      /    \      /`````````
-    ``\____/      \____/      \____/      \____/```````````
-    ``/    \      /    \      /    \      /    \````````````
-    `/      \____/      \____/      \____/      \____```````
-    `\      /    \      /    \      /    \      /    \````````
-    ``\____/      \____/      \____/      \____/      \____``
-    ``/    \      /    \      /    \      /    \      /    \`
-    `/      \____/      \____/      \____/      \____/      \`
-    `\      /    \      /    \      /    \      /    \      /`
-    ``\____/      \____/      \____/      \____/      \____/`
-    ``/    \      /    \      /    \      /    \      /    \`
-    `/      \____/      \____/      \____/      \____/      \`
-    `\      /    \      /    \      /    \      /    \      /`
-    ``\____/      \____/      \____/      \____/      \____/`
-    ``/    \      /    \      /    \      /    \      /    \`
-    `/      \____/      \____/      \____/      \____/      \`
-    `\      /    \      /    \      /    \      /    \      /`
-    ``\____/      \____/      \____/      \____/      \____/`
-    ```````\`     /    \      /    \      /    \      /    \`
-    ````````\____/      \____/      \____/      \____/      \`
-    `````````````\`     /````\      /````\      /````\       \`
-    ``````````````\____/``````\____/``````\____/``````\  end  \`
-    ```````````````````````````````````````````````````\       \`
+`__````__````__````__````__````__````__````__````__````__````__````
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+\__/``\__/``\__/``\__/``\__/``\__/``\__/``\__/``\__/``\__/``\__/
 """	
-
-		
-		templates.append(template)
+	
+		#templates.append(template)
 
 		print "Here's a quick demo using templates\n"
 		maze = mazeify()
+		maze.scan_diagonal = options.zigzag
+		maze.scan_wall_space = not options.no_wall_scan
 		for template in templates:
 			print "input template:"
 			print ""
 			print template
-			maze.parseTemplate(template)
+			maze.parseTemplate(template,options.startx,options.starty)
 			out = maze.toString()
 			print ""
 			print "output:"
@@ -539,11 +626,12 @@ if __name__ == '__main__':
 
 	# parse a template file and display maze
 	def parse_file(options):
-		scan_diagonal=options.zigzag
-		maze = mazeify(scan_diagonal=scan_diagonal)
+		maze = mazeify()
+		maze.scan_diagonal = options.zigzag
 		maze.debug = options.debug	
 		maze.thickness = int(options.thickness)
-		maze.parseTemplateFile(options.filename)
+		maze.scan_wall_space = not options.no_wall_scan
+		maze.parseTemplateFile(options.filename,options.startx,options.starty)
 		out = maze.toString()
 		print out
 
@@ -552,6 +640,7 @@ if __name__ == '__main__':
 	def create_maze(options):
 		maze = mazeify()
 		template = maze.tessellate_square(options.width, options.height)
+		maze.scan_wall_space = not options.no_wall_scan
 		maze.parseTemplate(template)
 		out = maze.toString()
 		print out
@@ -566,6 +655,9 @@ if __name__ == '__main__':
 	parser.add_option('-W', '--width', action='store', dest='width', type="int", help='width', default=20) 
 	parser.add_option('-H', '--height', action='store', dest='height', type="int", help='height', default=20) 
 	parser.add_option('-m', '--maze', action='store_true', dest='maze', help='create a basic maze.', default=False) 
+	parser.add_option('--start-x', action='store', dest='startx', help='start scan at x', default=-1) 
+	parser.add_option('--start-y', action='store', dest='starty', help='start scan at y', default=-1) 
+	parser.add_option('--no-wall-scan', action='store_true', dest='no_wall_scan', help="don't scan any space that was previously taken by a wall", default=False) 
 
 	options, args = parser.parse_args()
 
@@ -574,5 +666,5 @@ if __name__ == '__main__':
 	elif options.maze:
 		create_maze(options)
 	else:
-		demo()
+		demo(options)
 
