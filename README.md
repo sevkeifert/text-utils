@@ -13,7 +13,6 @@ index-java-classes.py
 > This script indexes the java classes and java jars found under a directory.
 It lists out every single class, file path, and jar file (if any).
  
-
 outline 
 > Create and parse text outlines from simple markup.  Supports roman numeral (I. A. 1. a.) and decimal formats(1, 1.2, 1.2.3).  Written in Perl.
 
@@ -23,3 +22,5 @@ maze.py
 maze-ify-ascii.py
 > This script turns an ASCII tessellation into a maze.
  
+svi
+> secure vi text editor - to allow editing/viewing AES encrypted files from the command line.  (Bash script)

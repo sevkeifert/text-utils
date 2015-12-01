@@ -1,0 +1,94 @@
+#!/bin/bash
+#
+# Kevin Seifert - GPLv2 2009
+#
+# This bash script is a wrapper for using vi to edit aes encrypted files.
+#
+# aes file name passed in as argument, for example:
+#     svi FILENAME.aes
+#
+# To open a file as read only, create sview symlink
+#     ln -s svi sview 
+#     sview FILENAME
+#
+# command line tools required:
+#	vi (or your editor of choice)
+#	openssl
+#	shred
+#
+# Note: a temporary decrypted copy of the file is created under /tmp during
+# editing.  This is run through `shred` after editing is complete.
+#
+
+# type of encryption used.
+cipher=aes-256-cbc
+
+# where temp files will be decrypted
+tmp=/tmp/
+
+if [[ $1 == "" ]]
+then
+  echo "use: $0  <file>"
+  exit
+fi
+
+# create tmp dir/file
+me=`basename $0`
+dir=`dirname "$tmp$1.tmp"`
+mkdir -p "$dir"
+touch "$tmp$1.tmp"
+chmod 600 "$tmp$1.tmp"
+
+
+# decrypt to tmp
+if [[ -e "$1" ]]
+then
+  if openssl $cipher -d -a -salt -in "$1"  > "$tmp$1.tmp" 
+  then
+    if [[ ! -s "$tmp$1.tmp" ]] 
+    then
+      echo "WARNING: decrypted an empty file, exiting."
+      exit
+    fi
+  else 
+    echo "WARNING: bad password, exiting."
+    exit
+  fi
+fi
+
+# symlink to this script with 'sview' to open file in read-only mode
+if [[ $me == 'sview' ]]
+then
+  # open file read only, no swp
+  vi -n -R "$tmp$1.tmp"
+
+else 
+  # open file for editing, no swp
+  vi -n "$tmp$1.tmp"
+
+  # re-encrypt after exiting vi
+  if [[ -s "$tmp$1.tmp" ]]
+  then
+    touch "$tmp$1.aes" 
+    chmod 600 "$tmp$1.aes"
+    while [[ ! -s "$tmp$1.aes" ]]
+    do
+      openssl $cipher -a -salt -in "$tmp$1.tmp" > "$tmp$1.aes"
+    done
+    
+    # make backup of old file in case password was mistyped.
+    if [[ -s "$tmp$1.aes" ]] 
+    then
+      if [[ -s "$1" ]]   
+      then
+        mv "$1" $1.$(date "+%Y-%m-%d").bac 
+      fi
+      mv -f "$tmp$1.aes" "$1"
+    fi
+  fi
+fi
+
+# cleanup
+shred -z -u "$tmp$1.tmp"
+rm -f "$tmp$1.aes"
+
