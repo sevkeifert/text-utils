@@ -402,8 +402,8 @@ class mazeify:
 		c1 = '' 
 		c2 = ''
 		if self.use_microspace:
-			return self.unvisited
-			# TODO: test
+			# TODO: test this more
+			#return self.unvisited
 			# look at macro char primary value only	
 			char = self.getMacroCharValue(x,y)
 			c1 = self.getMacroCharValue(x+3,y)
