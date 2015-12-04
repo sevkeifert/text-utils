@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# TODO: auto-detect wall lengths (scan for neighboring wall which is different)
+
 # Kevin Seifert - GPL v2 2015
 #
 # This script turns an ASCII tessellation into a maze.
