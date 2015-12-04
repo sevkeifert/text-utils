@@ -1,12 +1,7 @@
 #!/usr/bin/env python
 
-# TODO LIST:
-#	[ ] improve whitespace frame around maze for microspace parsing.  currently no control on this
-#	[x] improve implied horizonal wall break _/ |_ \_ -> __  
-#	[ ] add ~ meta char to flag and  prefill "outside" of shapes on initial parse
-#	[ ] add 'curviness' option
-#	[ ] on wall fill, count macro chars replaced. test length check for microparsing
-#	[ ] optimize for smaller use of recursion
+# TODO:
+#	[ ] optimize for smaller use of recursion. convert self.fill to fill2
 
 # Kevin Seifert - GPL v2 2015
 # 
@@ -93,7 +88,7 @@
 #   +---+---+---+---+---+---+---+---+---+---+---+---+---+
 #
 
-from random import shuffle
+from random import shuffle, randrange, randint
 import optparse
 import sys
 
@@ -102,14 +97,18 @@ class mazeify:
 
 	def __init__(self):
 
+		# logging
+		self.debug = False # verbose debugging
+
+		# data
 		self.board = [[]] # char array for maze. note: 0,0 is top left 
 
 		self.deltas = [(0,-1),(0,1),(-1,0),(1,0)] # scan/fill directions: N S E W
 		self.scan_diagonal = True # break diagonal wall patterns - experimental
 		self.zdeltas = [(1,-1),(-1,-1),(1,1),(-1,1)] + self.deltas # NW NE SW SE 
-
 		self.eol = '\n' # expected end-of-line in template
 		self.eol2 = '\n' # rendered end-of-line in ouput
+		self.pad = 1 # whitespace frame used in transform
 
 		# wall
 		self.scan_wall_space = True # scan from space that was previously wall
@@ -119,20 +118,17 @@ class mazeify:
 		self.corners = ['+'] # protect corner, prevent path from passing through
 		self.thickness = 1 # max thickness of wall 
 		self.length = -1 # max length of wall segment
-
-		# style tweaks
-		self.dot_last_underscore = False  # transform "_ " -> "_."?
+		#self.curviness = 100 # percent of direction change. 0 - 100 (always)
 
 		# cell flags
 		self.space = ' ' # empty path (for display)
 		self.unvisited = ' ' # any cell that is unvisited
 		self.visited = '`' # flag cells where we have walked
+		self.nether = '~' # flag outside of shape (for initial fill) 
 
-# TODO: allow flag of "outside" of shapes
-		#self.nether = '~' # flag outside of shape (for initial fill) 
-
-		self.debug = False # verbose debugging
-
+		# style tweaks
+		self.dot_last_underscore = False  # transform "_ " -> "_."?
+		self.close_implied_wall = False  # on remove vert, \_, |_, /_  to "__"?
 
 		# parse space inside cell for micro-templates.
 		# all chars cells will be converted to 9 cells, where
@@ -140,26 +136,30 @@ class mazeify:
 		self.use_microspace = False # parse space within char cell?
 		self.microspace_char_map = { 
 
-			'/' :[ '  /' ,
-				   ' / ' ,
-				   '/  ' ],
+			'/' :
+					[ '  /' ,
+					  ' / ' ,
+					  '/  ' ],
 
-			'|' :[ '~|~' ,  # use ~ to tighten up joins _\ _| _/ 
-				   ' | ' ,
-				   '~|~' ],
+			'|' :
+					[ '+|+' ,  # use corner + to tighten up joins _\ _| _/ 
+					  ' | ' ,
+					  '+|+' ],
 
+			'\\' :
+					[ '\\  ' ,
+					  ' \\ ' ,
+					  '  \\' ],
 
-			'\\' :[ '\\  ' ,
-					' \\ ' ,
-					'  \\' ],
+			'_' :
+					[ '   ' ,
+					  ' _ ' , # center is id
+					  '___' ],
 
-			'_' :[ '   ' ,
-				   ' _ ' , # center is id
-				   '___' ],
-
-			'-' :[ '   ' ,
-				   '---' ,
-				   '   ' ],
+			'-' :
+					[ '   ' ,
+					  '---' ,
+					  '   ' ],
 
 			#'+' :[ ' + ' , # use solid corner instead
 			#       '+++' ,
@@ -169,9 +169,9 @@ class mazeify:
 		}
 
 
-	
+
 	# parse/import an ASCII tesellation to be used as basis of maze
-	# construct maze
+	# creates maze by default (walks) 
 	def parseTemplate(self, template, create_maze=True):
 
 		# apply transform for 
@@ -189,21 +189,6 @@ class mazeify:
 		if self.eol != "\n":
 			template = template.replace("\n",self.eol) # nix
 
-
-		# TODO 
-		## add a whitespace frame around template, for 'outside' detection
-		## clean up right end
-		##for i in range(self.pad):
-		##	self.board.append([' ']*(max_len + 2))
-		#for line in lines:
-		#	tmp = len(line) 
-		#	cells = list(line) + ([' ']*(max_len-tmp))
-		#	#cells = ([' ']*self.pad) + list(line) + ([' ']*(self.pad + max_len - tmp))
-		#	#cells = [' ']*self.pad + list(line) + [' '] 
-		#	#cells = list( ' ' + line + ' '  ) 
-		#	self.board.append(cells)
-		##for i in range(self.pad):
-		##	self.board.append([' ']*(max_len + 2))
 	
 		lines = template.split(self.eol)
 
@@ -259,6 +244,7 @@ class mazeify:
 			raise Exception('x,y not in bounds'+str(x)+','+str(y))
 		return False
 
+
 	# get value at board at x,y
 	def get(self,x,y):
 
@@ -273,6 +259,7 @@ class mazeify:
 		return '' # no char
 
 
+	# macro char
 	def getMacroCharTopLeftPos(self,x,y):
 		# snap to first multiple of 3	
 		(x0,y0) = ((x/3)*3,(y/3)*3)
@@ -292,36 +279,35 @@ class mazeify:
 		if not self.inBounds(x,y):
 			return ''
 
-		#if not self.use_microspace:
-		#	return self.get(x,y) 
-
 		(x0,y0) = self.getMacroCharIdPos(x,y)
 		return self.get(x0,y0) 
 
-#
+		return c
+
+#	# set value(s) at board at x,y, in macro/micro space
+#	def setMacroChar(self,x,y,value):
+#		
+#		# set entire 9-grid, find upper left
+#		x0 = x/3 * 3
+#		y0 = y/3 * 3
+#		chars = self.getMacroCharMap(value)
+#		for i in range(3):
+#			for j in range(3):
+#				self.set(x0+j,y0+1,chars[i][j])
+
+# alt: find change in boundary
 #		# 9 cell -> 1 cell conversion
 #		(x0,y0) = self.getMacroCharTopLeftPos(x,y)
 #
 #		chars = self.getMacroCharMap(c)
-##		print "chars", chars
 #		for i in range(3):
 #			for j in range(3):
 #				c1 = chars[i][j] # should be
-#
-##				print "should be" , c1
-#
 #				c2 = self.get(x0+j,y0+1) # is
-##				print "is " , c2
-###				print c2,
-#
 #				if ( c1 != ' ' and c1 != c2 ):
-#					#print "compare", c1, c2
 #					# char has been changed, return diff
 #					return c2  
 #
-##			print "\n"					
-#
-		return c
 
 	# set value at board at x,y
 	def set(self, x, y, value):
@@ -332,11 +318,10 @@ class mazeify:
 
 		return True
 
+
 	# update a 9-cell macro character
 	# return changed points
 	def setMacroChar(self, x, y, value):
-
-		#print "setMacroChar", x, y, value
 
 		changed = []
 		if not self.inBounds(x,y,raise_exception=True):
@@ -350,7 +335,6 @@ class mazeify:
 		# is this whitespace?
 		if c1 in [self.visited,self.unvisited]: 
 			# safe to replace directly
-			#print "direct patch"
 			self.board[y][x] = value
 			changed.append((x,y))
 			return changed
@@ -361,7 +345,6 @@ class mazeify:
 		(x3,y3) = (x2+1, y2+1) # id pos at center
 		old_id = self.get(x3,y3) 
 		if old_id == value:
-			#print "no change"
 			return changed # nothing to do
 
 		# does new value collide with old value shape?
@@ -383,21 +366,16 @@ class mazeify:
 		return changed # all points updated
 
 
-#	# set value(s) at board at x,y, in macro/micro space
-#	def setMacroChar(self,x,y,value):
-#		
-#		# set entire 9-grid, find upper left
-#		x0 = x/3 * 3
-#		y0 = y/3 * 3
-#		chars = self.getMacroCharMap(value)
-#		for i in range(3):
-#			for j in range(3):
-#				self.set(x0+j,y0+1,chars[i][j])
-
-
 	# preserve implied horizontal boundaries.
 	# transform  vert  \_, |_, /_   to   __
 	def getReplaceChar(self,x,y,dx,dy,char):
+
+		#return self.unvisited # to disable
+
+		if not self.close_implied_wall:
+			# transform  walls  \_, |_, /_  to " _"
+			# ignore implied horizonal walls
+			return self.unvisited
 
 		c1 = '' 
 		c2 = ''
@@ -420,6 +398,19 @@ class mazeify:
 		# default		
 		return self.unvisited
 
+	
+
+	# find all points matching
+	def find(self,find):
+		points = []
+
+		# scan all cells 
+		for y,row in enumerate(self.board): 
+			for x,c in enumerate(row):
+				if c == find: 
+				 	points.append((x,y))	
+
+		return points
 
 	# fill region with char, finding pattern and replacing.
 	# (like "fill region" in a paint program, finds boundaries)
@@ -489,15 +480,154 @@ class mazeify:
 		return data
 
 
+	# BETA VERSION: replacement for self.fill()
+	# converted from a simpler recusive function to standard function.
+	# (with recursion, it was sometimes hitting too many levels of recursion).
+
+	# fill region with char, finding pattern and replacing.
+	# (like "fill polygon" in a paint program, finds boundaries)
+	def fill2(self,x,y,find,replace,level=0,data=[]):
+		points = [(x,y)]
+		return self.fillBlock(points, find, replace, level, data)
+
+
+	# fill region with char, finding pattern and replacing.
+	# like self.fill, but accepts mulitple points.
+	def fillBlock(self, points, find, replace, level=0, data=[]):
+
+		#	data = []
+		if len(find) != len(replace):
+			print 'Warn: lengths differ. "'+find+'" -> "'+replace+'"'
+		if find == replace:
+			print 'Warn: same find == replace: '+find
+			return data; 
+
+		next_scan = points # init loop
+		walls = []
+
+		while(len(next_scan) > 0):
+
+			# process queued set of points
+			points = next_scan # the current working set
+			next_scan = []
+			this_scan = []
+
+			# what wall directions will be scanned in ASCII template?
+			# note: these are returned by reference
+			deltas = []
+
+			if self.scan_diagonal and find in self.walls_diagonal:
+				deltas = self.zdeltas # break diagonal wall patterns
+			else:
+				deltas = self.deltas # zdelta won't detect X whitespace bound
+	
+				
+			for (x,y) in points:
+	
+				# process point
+				if self.debug:
+					print 'fill pre', x, y, find, replace, level
+					print "macro id ", self.getMacroCharIdPos(x,y), self.getMacroCharValue(x,y)
+					print self.toString(True) 
+		
+				# scan in large straight paths when possible 
+				# (minimize recursion)
+				for (dx,dy) in deltas:
+					x2 = x
+					y2 = y
+
+					c = self.get(x2,y2)
+
+					while c == find: # hit
+
+						checked = [(x2,y2)]
+
+						if not self.inBounds(x2,y2):
+							#print "off the borad"
+							break 
+
+						if (x2,y2) in data:
+							#print "already checked"
+							break
+
+						# update
+						if self.use_microspace:
+							checked += self.setMacroChar(x2,y2,replace)
+						else:	
+							self.set(x2,y2,replace)
+
+						# track changes
+						for p in checked:
+							if not ( p in data ):
+								data.append(p)
+								this_scan.append(p)
+
+						# end for
+
+						# count wall removed for implicit wall boundaries.
+						# for example, (__)(__) = ____
+						if self.length != -1 and c in self.walls:
+							(xw,yw) = (x2,y2) 
+							if self.use_microspace:
+								(xw,yw) = self.getMacroCharTopLeftPos(x2,y2)
+							if not ( (xw,yw) in walls ):
+								walls.append((xw,yw))
+								if len(walls) >= self.length:
+									# end. maxed out wall segment changes
+									return data
+
+						x2 = x + dx 
+						y2 = y + dy 
+						c = self.get(x2,y2)
+
+					# end while c == find
+				# end for deltas
+			# end for points
+
+			if self.debug:
+				print 'fill post', x, y, find, replace, level
+				print self.toString(True) 
+
+			# save snapshot of all new neighboring points encountered
+			for (x3,y3) in this_scan:
+				for (dx,dy) in deltas:
+					x4 = x3 + dx 
+					y4 = y3 + dy 
+					if self.inBounds(x4,y4) and not ((x4,y4) in next_scan) and not ((x4,y4) in data):
+						next_scan.append((x4,y4))
+
+		# end while next_scan
+
+		return data		
+
+	# END BETA VERSION
+
+
+	# fill "outside" region of shapes (anything containing with ~ nether)
+	def initOutside(self):
+		data = []
+		# flag "outside of shape"
+		if self.pad > 0:
+			self.fill(0,0,self.unvisited,self.visited)	
+
+		points = self.find(self.nether)
+		if self.debug:
+			print "find nether", points
+		for (x,y) in points:
+			# block off any region containing ~
+			self.fill(x,y,self.nether,self.unvisited)	
+			self.fill(x,y,self.unvisited,self.visited)	
+	
+
 	# scan the entire ASCII map, build the maze
  	def createMaze(self):
 
+		self.initOutside()
 		data = [] # track where we've checked
-		
+
+		# aim start in for middle.
 		h = len(self.board)-1
 		w = len(self.board[h/2])-1
-
-		# aim for middle.
 		for y in xrange(h/2, h):
 			for x in xrange(w/2,w):
 				c = self.get(x,y)
@@ -506,9 +636,8 @@ class mazeify:
 				 	self.walk(x,y,0,data)	
 
 		# scan all cells 
-		for y in xrange(len(self.board)-1):
-			for x in xrange(len(self.board[y])-1):
-				c = self.get(x,y)
+		for y,row in enumerate(self.board): 
+			for x,c in enumerate(row):
 				if c == self.unvisited: 
 				 	self.walk(x,y,0,data)	
 
@@ -526,7 +655,10 @@ class mazeify:
 
 		# scan pattern
 		deltas = list(self.deltas) # make copy
+
+		#if randint( 0, 100 ) < self.curviness:
 		shuffle(deltas)
+
 		for delta in deltas:
 			
 			(dx,dy) = delta
@@ -578,7 +710,7 @@ class mazeify:
 			if scan == self.unvisited:
 				# hit paydirt, inside a new room
 				changed = []
-				shuffle(path)
+				#shuffle(path)
 
 				# knock down wall.  note: must use a delimiter/change
 				# or parser won't know where the wall segment boundary ends
@@ -587,16 +719,11 @@ class mazeify:
 					(x3,y3) = point
 					c = self.get(x3,y3)
 
-# FIXME update `replace` for macrospace
+					# FIXME update `replace` for macrospace
 					replace = self.getReplaceChar(x3,y3,dx,dy,c)
 					changed = self.fill(x3,y3,c,replace) # hulk smash!
 					#if replace == self.visited:
 					walls_changed += changed
-			
-				## flag values as changed	
-				#if self.use_microspace:
-				#	for (x4,y4) in walls_changed:
-				#		self.setMacroChar(x4,y4,self.unvisited)
 
 				# claim empty room
 				changed = self.fill(x2,y2,self.unvisited,self.visited)
@@ -647,21 +774,42 @@ class mazeify:
 		c2 = [c*3]*3 # else solid 3x3 block
 		return c2
 
-
-	# get macrospace char value at x,y 
-	def getMicroChar(self, x, y):
-
-		c = self.get(x,y)
-
  
 	# parse char microspace into macrospace
+	# add a whitespace frame around template, for 'outside' detection
+	# optional: convert 1-cell into 9-cell blocks (3x3)
 	def transform(self, template):
-		if not self.use_microspace:
-			return template
 
-		template2 = ''
 
 		lines = template.split(self.eol)
+
+		max_len = 0
+		for line in lines: # find maximum line lenght
+			tmp = len(line.rstrip())
+			if tmp > max_len:
+				max_len = tmp
+
+		# add whitespace frame, clean up right end
+		template2 = ''
+		top_bottom =  ' '*(max_len + 2*self.pad) + self.eol
+		#top_bottom = self.nether + ' '*(max_len + 2*self.pad - 1 ) + self.eol
+		for i in range(self.pad):
+			template2 += top_bottom
+
+		for line in lines:
+			line =line.rstrip()
+			tmp = len(line)
+			template2 += ' '*self.pad + line + ' '*(self.pad+max_len-tmp) + self.eol
+		for i in range(self.pad):
+			template2 += top_bottom
+	
+		if not self.use_microspace:
+			return template2
+
+		# optional: convert 1-cell -> 9-cell 
+		lines = template2.split(self.eol)
+		template2 = ''
+
 		for line in lines:
 			# sub lines
 			temp = ['','','']	
@@ -673,168 +821,46 @@ class mazeify:
 			for i in range(3):
 				template2 += temp[i] + self.eol
 
+
+		#tighted edges in 9-cell rendering (ignore some microspace)
+		tighten = [
+					('/  _', '/++_'),    # /_
+					('_  \\', '_++\\')   # _\
+				]
+
+		for (find,replace) in tighten: 
+			template2 = template2.replace(find,replace)
+
 		return template2
 
 
 	# parse macrospace into microspace
-	# 9 cell -> 1 cell for entire string
+	# 9-cell -> - cell for entire string
 	def inverse_transform(self, transform):
-		#print "original:"
-		#print  transform
-		#print ""
 
-		if not self.use_microspace:
-			return transform # no change
 
-		t2 = ''
+		if self.use_microspace:
+			t2 = ''
+			lines = transform.split(self.eol2)
+			for y,row in enumerate(lines):
+				if(y%3) == 1: # center of row
+					for x, c in enumerate(row):
+						if (x%3) == 1: # center of cells
+							t2 += c 
+					t2 += self.eol2
+			transform = t2
 
 		lines = transform.split(self.eol2)
-		for y,row in enumerate(lines):
-			if(y%3) == 1: # center of row
-				for x, c in enumerate(row):
-					if (x%3) == 1: # center of cells
 
-						t2 += c 
-						pass
-				t2 += self.eol2
+		#slice off top, bottom
+		lines = lines[self.pad : -self.pad]
+		t2 = ''
+		for line in lines:
+			#slice off left, right
+			t2 += line[self.pad : -self.pad] + self.eol2
+		
 		return t2
 
-
-
-
-
-# generalize:
-#
-#	# The character _ needs special handling. 
-#	# for example:  _   
-#	#              |_|   (contains visual space, but no space character)
-#	# 
-#	# It will be treated as wall/whitespace hybrid.
-#	# so, transform the template to a topologically equivalent map of chars
-#	# with clean wall/whitespace boundaries.  For example, an underscore _ is
-#	# an unusual cell character in that it has visual properties of whitespace,
-#	# but it takes up a full char cell (it is a wall).  To simplify parsing,
-#	# transform _ into two cells to represent for both the whitespace and wall
-#	# components.  The special character ~ represents non-space in between
-#	# cells.
-#	#
-#	# example:
-#	#                     a b 
-#	#            a_b  ->  ~_~
-#	# 
-#	#
-#	#                      |`| 
-#	#            _        ~~_~~
-#	#           |_|  ->    | |
-#	#                     ~~_~~
-#	#
-#	# first white space is flagged as already claimed (to protect exterior wall)
-#	#
-#	# diagonal wall boundaries can be stretched if present, for example:
-#	#                     
-#	#                     
-#	#           \_/  ->    \ /     
-#	#                     ~\_/~     
-#	#
-#
-#	def transform2(self, template):
-#		#return template
-#
-#		s = ''
-#		rowidx = 0
-#		cellidx = 0
-#		row1 = [''] 
-#		row2 = ['']
-#
-#		for c in template:
-#
-#			#print c
-#			if c == self.eol:
-#				rowidx += 1
-#				cellidx = 0
-#				row1.append('')
-#				row2.append('')
-#
-#			# split _ into clean whitespace and wall components
-#			elif c == '_':
-#
-#				# special case: first whitespace in col is outside shape
-#				if rowidx == 0: 
-#					# treat first white space as claimed whitespace
-#					row1[rowidx] += self.nether 
-#				elif cellidx > len(row1[rowidx-1])-1:
-#					# previous row doesn't contain data at this point
-#					# treat as claimed whitespace
-#					row1[rowidx] += self.nether 
-#				elif  row1[rowidx-1][cellidx] == self.visited:
-#					#row1[rowidx] += self.visited 
-#					row1[rowidx] += self.nether # temporary flag, prevent loop
-#				else:
-#					# treat as new whitespace
-#					row1[rowidx] += ' '
-#
-#				row2[rowidx] += '_'
-#				cellidx += 1
-#
-#			# extend diagonal walls so they are still touching _
-#			#elif c in self.walls:
-#			elif c in self.walls_diagonal:
-#				row1[rowidx] += c 
-#				row2[rowidx] += c
-#				cellidx += 1
-#
-#			else:
-#				row1[rowidx] += c 
-#				row2[rowidx] += self.nether # nether region
-#				cellidx += 1
-#
-#		# combine rows
-#		i = 0
-#		while i <= rowidx: 
-#			s += row1[i].replace(self.nether, self.visited) # flag space 
-#			s += self.eol 
-#			s += row2[i] # retain nether, strip out in inverse_transform()
-#			s += self.eol 
-#			i += 1
-#
-#		return s
-#
-#
-#	# inverse transform, where:
-#	#   t = transform(template)
-#	#   template = inverse_transform(t)
-#	#
-#	# example
-#	#          a b            
-#	#          ~_~  ->  a_b 
-#	# example
-#	#          1 3            
-#	#          ~2~  ->  123 
-#	#
-#	def inverse_transform2(self, transform):
-#
-#		#return transform
-#
-#		s = ''
-#
-#		# collapse odd/even rows
-#		rows = transform.split(self.eol)
-#		for i in xrange(0,len(rows)-1,2):
-#			row1 = list(rows[i])
-#			row2 = rows[i+1]
-#			for j,c in enumerate(row2):
-#				try:
-#					if c == '_':
-#						row1[j] = c	 
-#				except Exception as e:
-#					print "Warn: could not apply inverse transform"
-#					print e
-#
-#			s += ''.join(row1)
-#			s += self.eol 
-#
-#		return s
-#
 
 	# a temporary method for random testing 
 	def kevtest(self):
@@ -865,6 +891,8 @@ if __name__ == '__main__':
 		maze.scan_wall_space = not options.no_wall_scan
 		maze.dot_last_underscore = options.dot_last_underscore 
 		maze.use_microspace = options.use_microspace 
+		maze.close_implied_wall = options.close_implied_wall 
+		#maze.curviness = options.curviness 
 
 
 	#  simple template parsing demos / regression tests
@@ -895,6 +923,8 @@ if __name__ == '__main__':
 		templates.append(template)
 		parsers.append(None) # default parser
 
+#### test
+
 		template = r'''
     Example: irregular cells, holes
                                                               
@@ -913,6 +943,7 @@ if __name__ == '__main__':
 		parsers.append(None) # default parser
 
 
+#### test
 
 		template = r'''
     Example: oblique
@@ -942,6 +973,7 @@ if __name__ == '__main__':
 		templates.append(template)
 		parsers.append(None) # default parser
 
+#### test
 
 		template = r"""
     Example: mixed tessellations are also possible
@@ -989,6 +1021,7 @@ if __name__ == '__main__':
 		templates.append(template)
 		parsers.append(None) # default parser
 
+#### test
 
 		# irregular, with diagonal walls, text, protected whitespace
 		# be careful with trailing whitespace
@@ -1037,6 +1070,7 @@ if __name__ == '__main__':
 		maze.scan_diagonal = True
 		parsers.append(maze)
 
+#### test
 
 		# Note: On concave shapes, the scanner will try to connect opposite
 		# sides of the mouth. It just views the gap as another space it is
@@ -1088,6 +1122,7 @@ if __name__ == '__main__':
 		parsers.append(None) # default parser
 
 
+#### test
 
 		template = r"""
 
@@ -1118,11 +1153,63 @@ special handling for _ translate implied whitespace
 		#maze.dot_last_underscore = True   # sharpen corners _ -> _.
 		parsers.append(maze)
 
+#### test
+
+		template = r"""
+
+triangles - implied whitespace
+    ____________________________
+    \  /\  /\  /\  /\  /\  /\  / 
+     \/__\/__\/__\/__\/__\/__\/  
+     /\  /\  /\  /\  /\  /\  /\
+    /__\/__\/__\/__\/__\/__\/__\ 
+    \  /\  /\  /\  /\  /\  /\  / 
+     \/__\/__\/__\/__\/__\/__\/  
+     /\  /\  /\  /\  /\  /\  /\  
+    /__\/__\/__\/__\/__\/__\/__\ 
+    \  /\  /\  /\  /\  /\  /\  / 
+     \/__\/__\/__\/__\/__\/__\/  
+     /\  /\  /\  /\  /\  /\  /\
+    /__\/__\/__\/__\/__\/__\/__\ 
+
+
+     /\/\/\/\/\/\/\/\/\/\/\
+    /\/\/\/\/\/\/\/\/\/\/\/
+    \/\/\/\/\/\/\/\/\/\/\/\
+    /\/\/\/\/\/\/\/\/\/\/\/
+    \/\/\/\/\/\/\/\/\/\/\/\
+    /\/\/\/\/\/\/\/\/\/\/\/
+    \/\/\/\/\/\/\/\/\/\/\/\
+    /\/\/\/\/\/\/\/\/\/\/\/
+    \/\/\/\/\/\/\/\/\/\/\/\
+    /\/\/\/\/\/\/\/\/\/\/\/
+    \/\/\/\/\/\/\/\/\/\/\/\
+    /\/\/\/\/\/\/\/\/\/\/\/
+    \/\/\/\/\/\/\/\/\/\/\/
+
+"""	
+	
+		maze = mazeify()
+		apply_options(maze,options)
+		maze.length = 1
+		maze.scan_diagonal = True
+		maze.use_microspace = True  
+		maze.close_implied_wall = True
+
+		#maze.dot_last_underscore = True   # sharpen corners _ -> _.
+
+		parsers.append(maze)
+		templates.append(template)
+	
+
+#### test
 
 		# requires special handling for no-separator between wall segments
 		template = r"""
-#micro template 
-#(note: there's no whitespace in this template)
+micro template example
+
+note: contains no actual 
+      whitespace
  ___________________________                           
  |_|_|_|_|_|_|_|_|_|_|_|_|_|                           
  |_|_|_|_|_|_|_|_|_|_|_|_|_|                           
@@ -1138,15 +1225,22 @@ special handling for _ translate implied whitespace
                                                        
 """	
 
-# quick render
+# quicker render
 		# requires special handling for no-separator between wall segments
-		template = r"""
- _________________ 
- |_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_| 
+		template2 = r"""
+_________________ 
+|_|_|_|_|_|_|_|_| 
+|_|_|_|_|_|_|_|_| 
+|_|_|_|_|_|_|_|_| 
+|_|_|_|_|_|_|_|_| 
+|_|_|_|_|_|_|_|_| 
+
+_________________ 
+|_|_|_|_|_|_|_|_| 
+|_|_|_|_|_|_|_|_| 
+|_|_|_|   |_|_|_| 
+|_|_|_| ~ |_|_|_| 
+|_|_|_|___|_|_|_| 
 
 """	
 	
@@ -1156,41 +1250,14 @@ special handling for _ translate implied whitespace
 		# tune parser: set explicit wall length
 		maze = mazeify()
 		apply_options(maze,options)
-		#maze.length = 1
+		maze.length = 1
 		maze.use_microspace = True  
+		maze.close_implied_wall = True  
 		#maze.dot_last_underscore = True   # sharpen corners _ -> _.
 		parsers.append(maze)
 
+#### end test
 
-		#half implemented: triangles - implied whitespace
-		template = r"""
-                          
-   _____________________
-  /\  /\  /\  /\  /\  /\  
- /__\/__\/__\/__\/__\/__\ 
- \  /\  /\  /\  /\  /\  / 
-  \/__\/__\/__\/__\/__\/  
-  /\  /\  /\  /\  /\  /\  
- /__\/__\/__\/__\/__\/__\ 
- \  /\  /\  /\  /\  /\  / 
-  \/__\/__\/__\/__\/__\/  
-  /\  /\  /\  /\  /\  /\  
- /__\/__\/__\/__\/__\/__\ 
- \  /\  /\  /\  /\  /\  / 
-  \/__\/__\/__\/__\/__\/  
-                          
-"""	
-	
-		maze = mazeify()
-		apply_options(maze,options)
-		maze.length = 1
-		maze.use_microspace = True  
-		#maze.dot_last_underscore = True   # sharpen corners _ -> _.
-
-		# TODO 
-		#parsers.append(maze)
-		#templates.append(template)
-	
 
 		# only parse one demo template
 		if options.test > -1:
@@ -1219,7 +1286,7 @@ special handling for _ translate implied whitespace
 			print template
 			parser.parseTemplate(template)
 
-			if maze.use_microspace:
+			if parser.use_microspace:
 				print "microspace parsing:" 
 				print parser.toString(True).rstrip()
 
@@ -1281,6 +1348,13 @@ special handling for _ translate implied whitespace
 
 	parser.add_option('--dot-last-underscore', action='store_true', dest='dot_last_underscore', 
 		help='add a dot . decorator to last underscore in a segment.', default=False) 
+
+	parser.add_option('--close-implied-wall', action='store_true', dest='close_implied_wall', 
+		help='preserve implied horizontal walls _|_/_\\_  -> ______', default=False) 
+
+#	parser.add_option('-c', '--curviness', action='store', dest='curviness', type="int",
+#		help='curviness [0,100]', default=100) 
+
 
 	parser.add_option('--kevtest', action='store_true', dest='kevtest', 
 		help='run a temporary test function', default=False) 
