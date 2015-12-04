@@ -16,8 +16,9 @@
 # Also, be careful on using _ (underscore) in your template.  
 # It looks like mostly whitespace, but it is a solid wall for the entire cell.
 #
-# Use the self.visited char (`) to prevent scanner from traversing whitespace.
-# For example, to prevent the parser from puncturing a wall to outside a shape.
+# Use the self.avoid char (~) to prevent scanner from traversing whitespace
+# inside a region.  For example, to prevent the parser from puncturing a wall
+# to room inside  a shape.
 # 
 # COMMAND LINE USAGE:
 #
@@ -124,7 +125,7 @@ class mazeify:
 		self.space = ' ' # empty path (for display)
 		self.unvisited = ' ' # any cell that is unvisited
 		self.visited = '`' # flag cells where we have walked
-		self.nether = '~' # flag outside of shape (for initial fill) 
+		self.avoid = '~' # flag regions were parser should avoid 
 
 		# style tweaks
 		self.dot_last_underscore = False  # transform "_ " -> "_."?
@@ -463,7 +464,7 @@ class mazeify:
 					if self.inBounds(x2,y2) and not ( (x2,y2) in data):
 						self.fill(x2,y2,find,replace,level+1,data)			
 
-		#elif c == '~': # in nether space 
+		#elif c == '~': # in avoid space 
 		#	data.append((x,y))
 		#	# ignore and scan up/down neighbors only
 		#	for (dx,dy) in deltas:
@@ -603,19 +604,19 @@ class mazeify:
 	# END BETA VERSION
 
 
-	# fill "outside" region of shapes (anything containing with ~ nether)
+	# fill "outside" region of shapes (anything containing with ~ avoid)
 	def initOutside(self):
 		data = []
 		# flag "outside of shape"
 		if self.pad > 0:
 			self.fill(0,0,self.unvisited,self.visited)	
 
-		points = self.find(self.nether)
+		points = self.find(self.avoid)
 		if self.debug:
-			print "find nether", points
+			print "find avoid", points
 		for (x,y) in points:
 			# block off any region containing ~
-			self.fill(x,y,self.nether,self.unvisited)	
+			self.fill(x,y,self.avoid,self.unvisited)	
 			self.fill(x,y,self.unvisited,self.visited)	
 	
 
@@ -683,9 +684,9 @@ class mazeify:
 				path.append((x2,y2))
 				if scan ==  '':
 					finished = True   # dead end
-				#elif scan == self.nether: 
+				#elif scan == self.avoid: 
 				#	if dx != 0:
-				#		finished = True  # don't scan left/right in nether row
+				#		finished = True  # don't scan left/right in avoid row
 				elif scan in self.corners: 
 					finished = True # knicked a corner. ignore.
 
@@ -792,7 +793,7 @@ class mazeify:
 		# add whitespace frame, clean up right end
 		template2 = ''
 		top_bottom =  ' '*(max_len + 2*self.pad) + self.eol
-		#top_bottom = self.nether + ' '*(max_len + 2*self.pad - 1 ) + self.eol
+		#top_bottom = self.avoid + ' '*(max_len + 2*self.pad - 1 ) + self.eol
 		for i in range(self.pad):
 			template2 += top_bottom
 
