@@ -782,13 +782,16 @@ class mazeify:
 
 		self.initOutside()
 
-		data = [] # track where we've checked
-
 		# aim start in for middle.
 		h = len(self.board)-1
 		w = len(self.board[h/2])-1
-		for y in xrange(h/2, h):
-			for x in xrange(w/2,w):
+
+		ystart = randint(0,3* h/4)
+		xstart = randint(0,3* w/4)
+
+		data = [] # track where we've checked
+		for y in xrange(ystart, h):
+			for x in xrange(xstart,w):
 				c = self.get(x,y)
 				if c == self.unvisited:
 				 	self.walk(x,y,0,data)	
@@ -1504,16 +1507,16 @@ _________________
 
 		template = r"""
 
-Mr smiley
+Mr Smiley
                     __    __    __    __                          
                  __/  \__/  \__/  \__/  \__                       
               __/  \__/  \__/  \__/  \__/  \__                    
            __/  \__/  \__/  \__/  \__/  \__/  \__                 
 start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__              
      __/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \             
-    `  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/              
+    `  \__/  \__/~ \__/  \__/  \__/  \__/~ \__/  \__/              
     \__/  \__/        \__/  \__/  \__/        \__/  \__   
-  __/  \__/  \ ~      /  \__/  \__/  \ ~      /  \__/  \__ 
+  __/  \__/  \  *     /  \__/  \__/  \  *     /  \__/  \__ 
  /  \__/  \__/        \__/  \__/  \__/        \__/  \__/  \
  \__/  \__/  \__    __/  \__/  \__/  \__    __/  \__/  \__/
  /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
