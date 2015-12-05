@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-# TODO: auto-detect wall lengths (scan for neighboring wall which is different)
+# TODO: [ ]  auto-detect wall lengths (scan for neighboring wall which is different)
+#            add edge detect filter 
 
 # Kevin Seifert - GPL v2 2015
 #
@@ -20,7 +21,6 @@
 # to room inside  a shape.
 #
 # COMMAND LINE USAGE:
-#
 #
 #    # create a maze from an ASCII template file
 #    maze.py -f YOUR_TEMPLATE
@@ -257,13 +257,14 @@ class mazeify:
 		return '' # no char
 
 
-	# macro char
+	# macro char (9-cell) start point
 	def getMacroCharTopLeftPos(self,x,y):
 		# snap to first multiple of 3	
 		(x0,y0) = ((x/3)*3,(y/3)*3)
 		return (x0,y0)
 
 
+	# macro char (9-cell) center point
 	def getMacroCharIdPos(self,x,y):
 		# snap to first multiple of 3	
 		(x0,y0) = self.getMacroCharTopLeftPos(x,y)
@@ -271,7 +272,7 @@ class mazeify:
 		return (x0+1,y0+1)
 
 
-	# get value at board at x,y
+	# get macro char value at board at x,y
 	def getMacroCharValue(self,x,y):
 
 		if not self.inBounds(x,y):
@@ -460,16 +461,6 @@ class mazeify:
 #					y2 = y + dy
 #					if self.inBounds(x2,y2) and not ( (x2,y2) in data):
 #						self.fill(x2,y2,find,replace,level+1,data)			
-#
-#		#elif c == '~': # in avoid space
-#		#	data.append((x,y))
-#		#	# ignore and scan up/down neighbors only
-#		#	for (dx,dy) in deltas:
-#		#		if dx==0:
-#		#			x2 = x + dx
-#		#			y2 = y + dy
-#		#			self.fill(x2,y2,find,replace,level+1,data)			
-#
 #		if self.debug:
 #			print 'fill post', x, y, find, replace, level
 #			print self.toString(True)
@@ -481,8 +472,8 @@ class mazeify:
 	# (like "fill polygon" in a paint program, finds boundaries)
 	# this is a replacement for self.fill_old(), where the old function was
 	# converted from a simpler recusive function to standard function.
-	# with recursion, it was sometimes hitting too many levels of recursion.
-	# added suppoer for macro char replacements.
+	# otherwise the old function was sometimes hitting too many levels of
+	# recursion.  added suppoer for macro char replacements.
 	def fill(self,x,y,find,replace,level=0,data=None):
 		points = [(x,y)]
 		return self.fillBlock(points, find, replace, level, data)
@@ -600,7 +591,7 @@ class mazeify:
 		return data		
 
 
-	# fill "outside" region of shapes (anything containing with ~ avoid)
+	# fill "outside" region of shapes (anything containing ~ avoid)
 	def initOutside(self):
 		data = []
 		# flag "outside of shape"
@@ -640,7 +631,7 @@ class mazeify:
 
 
 	# walk around, knock down walls starting at x,y position
-	def walk(self,x=-1,y=-1,level=0,data=[]):
+	def walk(self,x=0,y=0,level=0,data=[]):
 
 		## optimize walk: only run one full scan on each space
 		if (x,y) in data:
@@ -670,7 +661,6 @@ class mazeify:
 			walls = []
 			wall = ''
 			wallsize = 0
-			#implied_whitespace = False
 
 			while not finished:
 				x2 += dx # walk in a direction
@@ -680,18 +670,8 @@ class mazeify:
 				path.append((x2,y2))
 				if scan ==  '':
 					finished = True   # dead end
-				#elif scan == self.avoid:
-				#	if dx != 0:
-				#		finished = True  # don't scan left/right in avoid row
 				elif scan in self.corners:
 					finished = True # knicked a corner. ignore.
-
-				#elif foundwall and self.isImpliedWhitespace(x2,y2,dx,dy,wall,scan):
-				#	finished = True
-				#	implied_whitespace = True
-				#	x2 -= dx
-				#	y2 -= dy
-
 				elif scan in self.walls:
 					wallsize += 1
 					if foundwall and wall != scan:
@@ -707,7 +687,6 @@ class mazeify:
 			if scan == self.unvisited:
 				# hit paydirt, inside a new room
 				changed = []
-				#shuffle(path)
 
 				# knock down wall.  note: must use a delimiter/change
 				# or parser won't know where the wall segment boundary ends
@@ -742,7 +721,7 @@ class mazeify:
 					self.walk(x2,y2,level+1,data)
 
 
-	# basic ASCII tessellations
+	# generate basic ASCII tessellations
 	def tessellate(self, w, h, type='square'):
 
 		#all patterns
@@ -845,8 +824,8 @@ class mazeify:
 		return template2
 
 
-	# parse macrospace into microspace
-	# 9-cell -> - cell for entire string
+	# parse macrospace into normal space.
+	# 9-cell -> 1-cell for entire string.
 	def inverse_transform(self, transform):
 
 		if self.use_microspace:
@@ -1136,7 +1115,8 @@ if __name__ == '__main__':
 
 		template = r"""
 
-special handling for _ translate implied whitespace
+translate implied whitespace 
+with microspace parsing
   __    __    __    __    __    __  
  /  \__/  \__/  \__/  \__/  \__/  \ 
  \__/  \__/  \__/  \__/  \__/  \__/ 
@@ -1160,7 +1140,6 @@ special handling for _ translate implied whitespace
 		maze = mazeify()
 		apply_options(maze,options)
 		maze.use_microspace = True  
-		#maze.dot_last_underscore = True   # sharpen corners _ -> _.
 		parsers.append(maze)
 
 #### test
@@ -1206,15 +1185,12 @@ triangles - implied whitespace
 		maze.use_microspace = True  
 		maze.close_implied_wall = True
 
-		#maze.dot_last_underscore = True   # sharpen corners _ -> _.
-
 		parsers.append(maze)
 		templates.append(template)
 	
 
 #### test
 
-		# requires special handling for no-separator between wall segments
 		template = r"""
 micro template example
 
@@ -1236,7 +1212,7 @@ note: contains no actual
 """	
 
 # quicker render
-		# requires special handling for no-separator between wall segments
+		
 		template_alt = r"""
 _________________ 
 |_|_|_|_|_|_|_|_| 
