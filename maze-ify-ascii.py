@@ -1,24 +1,24 @@
 #!/usr/bin/env python
 
-# TODO: [ ]  auto-detect wall lengths (scan for neighboring wall which is different)
-#            add edge detect filter 
-
+#TODO: debug diagonal fill / \
 # Kevin Seifert - GPL v2 2015
 #
 # This script turns an ASCII tessellation into a maze.
 #
 # NOTES ON TEMPLATES:
 #
-# You should use a delimiter (or char change) at the edge of each wall segment.
-# For example, in the template examples below, the '+' is the delimiter.
-# Otherwise, the parser doesn't know where the wall segment ends or begins.
+# You should use a delimiter (or char change) at the edge of each
+# wall segment.  For example, in the template examples below, the
+# '+' is the delimiter.  Otherwise, the parser doesn't know where
+# the wall segment ends or begins.
 #
-# Also, be careful on using _ (underscore) in your template.
-# It looks like mostly whitespace, but it is a solid wall for the entire cell.
+# Also, be careful on using _ (underscore) in your template.  It
+# looks like mostly whitespace, but it is a solid wall for the
+# entire cell.
 #
-# Use the self.avoid char (~) to prevent scanner from traversing whitespace
-# inside a region.  For example, to prevent the parser from puncturing a wall
-# to room inside  a shape.
+# Use the self.avoid char (~) to prevent scanner from traversing
+# whitespace inside a region.  For example, to prevent the parser
+# from puncturing a wall to room inside  a shape.
 #
 # COMMAND LINE USAGE:
 #
@@ -31,7 +31,8 @@
 #    # run demo/regression test
 #    maze.py
 #
-#    (or import the mazify class and generate your tessellation on the fly)
+#    (or import the mazify class and generate your tessellation on
+#    the fly)
 #
 # OPTIONS:
 #
@@ -89,6 +90,7 @@
 #
 
 from random import shuffle, randrange, randint
+from sets import Set
 import optparse
 import sys
 
@@ -141,9 +143,9 @@ class mazeify:
 					  '/  ' ],
 
 			'|' :
-					[ '+|+' ,  # use + to tighten up joins \| _| |
-					  ' | ' ,
-					  '+|+' ],
+					[ ' | ' ,  # use + to tighten up joins \| _| |
+					  ' | ' ,  # in self.imagePreProcess()
+					  ' | ' ],
 
 			'\\' :
 					[ '\\  ' ,
@@ -366,16 +368,19 @@ class mazeify:
 		return changed # all points updated
 
 
-	# preserve implied horizontal boundaries.
-	# transform  vert  \_, |_, /_   to   __
+	# vertical walls are also implied horizonal boundaries.  for example:
+	# breaking "|_" will result in " _".
+	# this method can transform vertical wall breaks to _
 	def getReplaceChar(self,x,y,dx,dy,char):
 
 		#return self.unvisited # to disable
 
+		# ignore implied horizonal walls
 		if not self.close_implied_wall:
-			# transform  walls  \_, |_, /_  to " _"
-			# ignore implied horizonal walls
 			return self.unvisited
+
+		if not (char in self.walls_vert):
+			return self.unvisited 
 
 		c1 = ''
 		c2 = ''
@@ -389,10 +394,10 @@ class mazeify:
 			c1 = self.get(x-1,y)
 			c2 = self.get(x+1,y)
 
-		if char in self.walls_vert:
-			# check horizontal neighbors directly
-			if '_' in [c1,c2]:
-				return '_'
+		# check horizontal neighbors directly
+		# transform from  \_, |_, /_  to  __
+		if '_' in [c1,c2]:
+			return '_'
 
 		# default		
 		return self.unvisited
@@ -400,7 +405,7 @@ class mazeify:
 
 	# find all points matching a given character
 	# return array of points
-	def find(self,find):
+	def findChar(self,find):
 		points = []
 
 		# scan all cells
@@ -412,76 +417,214 @@ class mazeify:
 		return points
 
 
-#	# fill region with char, finding pattern and replacing.
-#	# (like "fill region" in a paint program, finds boundaries)
-#	def fill_old(self,x,y,find,replace,level=0,data=None):
-#
-#		if level == 0:
-#			data = []
-#			if len(find) != len(replace):
-#				print 'Warn: lengths differ. "'+find+'" -> "'+replace+'"'
-#			if find == replace:
-#				print 'Warn: same find == replace: '+find
-#				return data;
-#		else:
-#			if (x,y) in data:
-#				#we've already checked this space
-#				return data
-#
-#		if self.debug:
-#			print 'fill pre', x, y, find, replace, level
-#			print "macro id ", self.getMacroCharIdPos(x,y), self.getMacroCharValue(x,y)
-#			print self.toString(True)
-#
-#		# what wall directions will be scanned in ASCII template?
-#		# note: these are returned by reference
-#		if self.scan_diagonal and find in self.walls_diagonal:
-#			deltas = self.zdeltas # break diagonal wall patterns
-#		else:
-#			deltas = self.deltas # zdelta won't detect X whitespace boundaries
-#
-#		c = self.get(x,y)
-#
-#		if c == find: # hit
-#			if self.use_microspace:
-#				changed = self.setMacroChar(x,y,replace)
-#				data += changed
-#			else:	
-#				self.set(x,y,replace)
-#				data.append((x,y))
-#
-#			if self.length != -1 and len(data) >= self.length and c in self.walls:
-#				# end. maxed out wall segment
-#				return data	
-#
-#			else:
-#				# recursively scan neighbors
-#				for (dx,dy) in deltas:
-#					x2 = x + dx
-#					y2 = y + dy
-#					if self.inBounds(x2,y2) and not ( (x2,y2) in data):
-#						self.fill(x2,y2,find,replace,level+1,data)			
-#		if self.debug:
-#			print 'fill post', x, y, find, replace, level
-#			print self.toString(True)
-#
-#		return data
+	# check a 2d rectangular block at point (x,y) for a pattern.
+	# return True if all chars in a 'find' pattern are set.  can
+	# scan multiple rows.  
+	# 'find' is an array of strings. for example:
+	# 	['row1','row2']
+	def hasPatternAt(self, find, x, y):
+
+		h = len(find)
+		w = len(find[0])
+		(i, j) = (0,0) # relative to find pattern
+
+		while True:
+			c_is = self.get(x+i,y+j)
+			c_should_be = find[j][i]
+
+			if c_is == c_should_be:
+				i += 1 # hit 
+			else:
+				return False
+
+			if i >= w:
+				j += 1 # wrapped, scan next row
+				i = 0
+
+			if j >= h: # hit end of rows. full match!
+				return True	
+
+		# end while
+
+		return False
 
 
-	# fill region with char, finding pattern and replacing.
-	# (like "fill polygon" in a paint program, finds boundaries)
-	# this is a replacement for self.fill_old(), where the old function was
-	# converted from a simpler recusive function to standard function.
-	# otherwise the old function was sometimes hitting too many levels of
-	# recursion.  added suppoer for macro char replacements.
-	def fill(self,x,y,find,replace,level=0,data=None):
-		points = [(x,y)]
-		return self.fillBlock(points, find, replace, level, data)
+	# 2d pattern matching.	
+	# like self.findChar(), but accepts a pattern that may span
+	# multiple rows.  
+	# For example to find:
+	# 	hello
+	# 	there
+	# search for: 
+	#	['hello','there']
+	# patterns must be rectangular.
+	# x,y is the start point for the scan.
+	# this will return an array of top-left points matching the
+	# pattern.  
+	def findPattern(self, find, x=0, y=0):
+
+		points = []
+
+		h = len(self.board)
+		w = len(self.board[0]) # rectangular
+
+		h2 = len(find)
+		if h2 == 0:
+			return []
+
+		w2 = len(find[0])
+		if w2 == 0:
+			return []
+
+		(rowidx, colidx) = (0,0)
+
+		# scan every cell starting at x,y and up
+		for j in xrange(y,h):
+
+			rowstart = x # skip first row of points 0,x-1
+			if j != y:
+				rowstart = 0
+
+			for i in xrange(rowstart, w):
+				if self.hasPatternAt(find,i,j):
+					points.append((i,j))	
+
+		return points
 
 
+	# return a set of all wall charactuers used in a string template
+	def getWallCharsUsed(self,string):
+		walls = Set([])
+		for c in string:
+			if c in self.walls and not (c in chars):
+				walls.add(c)	
+
+
+	# get a block of chars starting at top-left x,y, with width,height w,h 
+	# returns an array of lines 
+	def getBlockAt(self,x,y,w,h):
+		lines = []	
+		for j in xrange(y,y+h):
+			line = ''
+			for i in xrange(x,x+w):
+				line += self.get(i,j)
+			lines.append(line)
+		return lines
+
+
+	# 2d set: set a rectangular block pattern in the board at x,y.
+	def setBlock(self, x, y, pattern):
+		#print x,y,pattern
+		h = len(pattern)
+		w = len(pattern[0])
+		for j in xrange(h):
+			for i in xrange(w):
+				#print 'SET', x+i, y+j, pattern[j][i]
+				self.set(x+i, y+j, pattern[j][i])
+
+
+	# 2d find/replace.
+	# find all points matching a given character. replace with new
+	# values.  the find/replace patterns are arrays of strings
+	# that can span multiple rows.
+	#
+	# note on overlapping pattern matches: this replaces all found matches on
+	# one scan (it does NOT rescan after each replace operation.)  This means
+	# even if a replace operation alters the board, all initial matches
+	# are still replaced.
+	def replace(self, find, replace):
+
+		if self.debug:
+			print "before replace: " + str(find) + ' -> ' + str(replace)
+			print self.toString(raw=True)
+
+		points = self.findPattern(find)
+		for (x,y) in points:
+			self.setBlock(x, y, replace)
+
+		if self.debug:
+			print "after replace: " + str(find) + ' -> ' + str(replace)
+			print self.toString(raw=True)
+
+
+	# deprecated.
+	# fill region with a char, finding pattern and replacing.
+	def fillRecursive(self,x,y,find,replace,level=0,data=None):
+
+		if level == 0:
+			data = []
+			if len(find) != len(replace):
+				print 'Warn: lengths differ. "'+find+'" -> "'+replace+'"'
+			if find == replace:
+				print 'Warn: same find == replace: '+find
+				return data;
+		else:
+			if (x,y) in data:
+				#we've already checked this space
+				return data
+
+		if self.debug:
+			print 'fill pre', x, y, find, replace, level
+			print "macro id ", self.getMacroCharIdPos(x,y), self.getMacroCharValue(x,y)
+			print self.toString(True)
+
+		# what wall directions will be scanned in ASCII template?
+		# note: these are returned by reference
+		if self.scan_diagonal and find in self.walls_diagonal:
+			deltas = self.zdeltas # break diagonal wall patterns
+		else:
+			deltas = self.deltas # zdelta won't detect X whitespace boundaries
+
+		c = self.get(x,y)
+
+		if c == find: # hit
+			if self.use_microspace:
+				changed = self.setMacroChar(x,y,replace)
+				data += changed
+			else:	
+				self.set(x,y,replace)
+				data.append((x,y))
+
+			if self.length != -1 and len(data) >= self.length and c in self.walls:
+				# end. maxed out wall segment
+				return data	
+
+			else:
+				# recursively scan neighbors
+				for (dx,dy) in deltas:
+					x2 = x + dx
+					y2 = y + dy
+					if self.inBounds(x2,y2) and not ( (x2,y2) in data):
+						self.fill(x2,y2,find,replace,level+1,data)			
+		if self.debug:
+			print 'fill post', x, y, find, replace, level
+			print self.toString(True)
+
+		return data
+
+
+		
+
+	# fill region with char, finding pattern and replacing.  (like
+	# "fill polygon" in a paint program, finds boundaries) this is
+	# a replacement for self.fillRecursive(), where the old function
+	# was converted from a simpler recusive function to standard
+	# function.  otherwise the old function was sometimes hitting
+	# too many levels of recursion.  
+	# added support for macro char replacements.
+	def fill(self,x,y,find,replace,level=0,data=None,use_recursion=False):
+
+		if use_recursion:
+			return self.fillRecursive(x,y,find,replace,level,data)
+		else:
+			points = [(x,y)]
+			return self.fillPoints(points, find, replace, level, data)
+
+
+	# non-recursive function.
 	# fill region with char, finding pattern and replacing.
 	# like self.fill, but accepts mulitple points.
-	def fillBlock(self, points, find, replace, level=0, data=None):
+	def fillPoints(self, points, find, replace, level=0, data=None):
 
 		if level == 0:
 			data = []
@@ -495,6 +638,15 @@ class mazeify:
 		next_scan = points # init loop
 		walls = []
 
+		# what wall directions will be scanned in ASCII template?
+		# note: these are returned by reference
+		deltas = []
+
+		if self.scan_diagonal and find in self.walls_diagonal:
+			deltas = self.zdeltas # break diagonal wall patterns
+		else:
+			deltas = self.deltas # zdelta won't detect X whitespace bound
+
 		while(len(next_scan) > 0):
 
 			# process queued set of points
@@ -502,59 +654,59 @@ class mazeify:
 			next_scan = []
 			this_scan = []
 
-			# what wall directions will be scanned in ASCII template?
-			# note: these are returned by reference
-			deltas = []
+			# process point
+			if self.debug:
+				print ""
+				print 'fill pre', points, find, replace, level
+				#print 'fill pre', x, y, find, replace, level
+				#print "macro id ", self.getMacroCharIdPos(x,y), self.getMacroCharValue(x,y)
+				print self.toString(True)
 
-			if self.scan_diagonal and find in self.walls_diagonal:
-				deltas = self.zdeltas # break diagonal wall patterns
-			else:
-				deltas = self.deltas # zdelta won't detect X whitespace bound
-	
-				
+			# start scanning the set of points
 			for (x,y) in points:
 	
-				# process point
-				if self.debug:
-					print 'fill pre', x, y, find, replace, level
-					print "macro id ", self.getMacroCharIdPos(x,y), self.getMacroCharValue(x,y)
-					print self.toString(True)
-		
-				# scan in large straight paths when possible
-				# (minimize recursion)
-				for (dx,dy) in deltas:
-					x2 = x
-					y2 = y
+				x2 = x
+				y2 = y
+				# scan the point and all neighboring points in large straight
+				# paths when possible (minimize recursion)
+				# include current point
+				for (dx,dy) in deltas: 
 
-					c = self.get(x2,y2)
+					finished = False
+					while not finished: 
 
-					while c == find: # hit
+						c = self.get(x2,y2)
 
-						checked = [(x2,y2)]
+						if c != find:
+							break #not a match
 
-						if not self.inBounds(x2,y2):
-							#print "off the borad"
-							break
+						#if not self.inBounds(x2,y2):
+						#	break #off the board
 
-						if (x2,y2) in data:
-							#print "already checked"
-							break
+						#if (x2,y2) in data:
+						#	break # meh, already checked
 
-						# update
-						if self.use_microspace:
-							checked += self.setMacroChar(x2,y2,replace)
-						else:	
-							self.set(x2,y2,replace)
+						# pattern was found!
+						self.set(x2,y2,replace)
 
+						# TODO: test more
+						## this can update by macrospace char, but a normal fill
+						## should work, since all contained chars are contiguous.
+						#if self.use_microspace:
+						#	checked += self.setMacroChar(x2,y2,replace)
+						#else:	
+						#	self.set(x2,y2,replace)
 						# track changes
-						for p in checked:
-							if not ( p in data ):
-								data.append(p)
-								this_scan.append(p)
+						#for p in checked:
+						#	if not ( p in data ):
 
+						# don't retest this cell	
+						data.append((x2,y2))
+						this_scan.append((x2,y2))
 						# end for
 
-						# count wall removed for implicit wall boundaries.
+						# count removed wall segments to allow for implicit
+						# wall boundaries.  set with -l flag
 						# for example, (__)(__) = ____
 						if self.length != -1 and c in self.walls:
 							(xw,yw) = (x2,y2)
@@ -565,18 +717,18 @@ class mazeify:
 								if len(walls) >= self.length:
 									# end. maxed out wall segment changes
 									return data
+						x2 += dx
+						y2 += dy
 
-						x2 = x + dx
-						y2 = y + dy
-						c = self.get(x2,y2)
-
-					# end while c == find
+					# end while
 				# end for deltas
+
+				if self.debug:
+					print 'fill post', x, y, find, replace, level
+					print self.toString(True)
+
 			# end for points
 
-			if self.debug:
-				print 'fill post', x, y, find, replace, level
-				print self.toString(True)
 
 			# save snapshot of all new neighboring points encountered
 			for (x3,y3) in this_scan:
@@ -588,6 +740,9 @@ class mazeify:
 
 		# end while next_scan
 
+		if self.debug:
+			print '**** scan pass done ****'
+
 		return data		
 
 
@@ -598,19 +753,130 @@ class mazeify:
 		if self.pad > 0:
 			self.fill(0,0,self.unvisited,self.visited)	
 
-		points = self.find(self.avoid)
+		points = self.findChar(self.avoid)
 		if self.debug:
 			print "find avoid", points
+
 		for (x,y) in points:
 			# block off any region containing ~
 			self.fill(x,y,self.avoid,self.unvisited)	
-			self.fill(x,y,self.unvisited,self.visited)	
-	
+			self.fill(x,y,self.unvisited,self.visited)
+
+		if self.debug:
+			print "**** init complete ****"
+
+
+	# rules to connect known edge patterns between 3x3 macrospace characters.
+	# ignore some micro space between fonts, and tighten up graph prior to
+	# walk().  
+	def imagePreProcess(self):
+
+		patterns = [
+
+			# find/replace blocks
+			# syntax:
+
+			# [ ['find row 1','find row 2'], ['replace row1','replace row2'] ],
+
+
+			# connect edges:
+			# _
+			# |  _|_  |_ and _|
+
+			[ ['_','|'], ['+','|'] ],
+			[ ['_ | _'], ['_+++_'] ],
+			[ ['| _'], ['++_'] ],
+			[ ['_ |'], ['_++'] ],
+
+			
+			# connect sloppy edges:
+			# 
+			#  -|  |-
+			
+			[ ['- |'], ['-++'] ],
+			[ ['| -'], ['++-'] ],
+
+
+			# connect very sloppy edges:
+			# 
+			# /_  and _\
+
+			[ ['/  ___'], ['+++___'] ],
+			[ ['___  \\'], ['___+++'] ],
+
+			# sharpen edges (insert well-defined corner):
+			#           \  /
+			#  \/  /\   /  \
+			
+			[ ['\\/'], ['++'] ],
+			[ ['/\\'], ['++'] ],
+			
+			[ ['\\','/'], ['+','+'] ],
+			[ ['/','\\'], ['+','+'] ],
+
+			# connect edges:
+			# 
+			#  \|  |/  /|  and |\ 
+
+			[ ['\\ |'], ['\\++'] ],
+			[ ['| /'], ['++/'] ],
+			[ ['/ |'], ['/++'] ],
+			[ ['| \\'], ['++\\'] ],
+
+
+			# add more connector rules here ...
+
+		]	
+
+		for find,replace in patterns:
+			self.replace(find,replace)
+
+
+	# post image processing.  clean up implied horizontal/vertical wall
+	# artifacts using rules. 
+	# Note: self.board will still contain previous substitions along with `
+	# markers and any changes made during walk().
+	def imagePostProcess(self):
+
+		patterns = [
+
+			# find/replace blocks
+			# syntax:
+
+			# [ ['find row 1','find row 2'], ['replace row1','replace row2'] ],
+
+			# example: simpify edges with _:
+			#        _              __       _
+			# change |  to  |, and  |   to  |
+
+			#[ ['``_`', '`+++', '``|`'] , ['````', '`+++', '``|`'] ],
+			#[ ['`_``', '+++`', '`|``'] , ['````', '+++`', '`|``'] ],
+
+
+
+
+			# add more rules here ...
+
+		]	
+
+		# close implied horizonal walls in microtemplates
+		if self.close_implied_wall:
+			patterns.append([['`','+'] , ['_','+']])
+
+		for find,replace in patterns:
+			self.replace(find,replace)
+
 
 	# scan the entire ASCII map, build the maze
  	def createMaze(self):
 
+		if self.use_microspace:
+			self.imagePreProcess()
+			if self.debug:
+				print "**** imagePreProcess complete ****"
+
 		self.initOutside()
+
 		data = [] # track where we've checked
 
 		# aim start in for middle.
@@ -629,9 +895,17 @@ class mazeify:
 				if c == self.unvisited:
 				 	self.walk(x,y,0,data)	
 
+		if self.use_microspace:
+			self.imagePostProcess()
+			if self.debug:
+				print "**** imagePostProcess complete ****"
+
 
 	# walk around, knock down walls starting at x,y position
-	def walk(self,x=0,y=0,level=0,data=[]):
+	def walk(self,x=0,y=0,level=0,data=None):
+
+		if level == 0:
+			data = []
 
 		## optimize walk: only run one full scan on each space
 		if (x,y) in data:
@@ -694,11 +968,11 @@ class mazeify:
 				for point in walls:
 					(x3,y3) = point
 					c = self.get(x3,y3)
-
-					# FIXME update `replace` for macrospace
-					replace = self.getReplaceChar(x3,y3,dx,dy,c)
+					
+					#replace = self.getReplaceChar(x3,y3,dx,dy,c)
+					replace = self.visited
+					
 					changed = self.fill(x3,y3,c,replace) # hulk smash!
-					#if replace == self.visited:
 					walls_changed += changed
 
 				# claim empty room
@@ -770,6 +1044,8 @@ class mazeify:
 	# parse char microspace into macrospace
 	# add a whitespace frame around template, for 'outside' detection
 	# optional: convert 1-cell into 9-cell blocks (3x3)
+	# this is all just string based manipulation, prior to converting the
+	# template to a character array represented by self.board.
 	def transform(self, template):
 
 		lines = template.split(self.eol)
@@ -781,6 +1057,7 @@ class mazeify:
 				max_len = tmp
 
 		# add whitespace frame, clean up right end
+		# frame will allow detecting "outside" of shape with fill
 		template2 = ''
 		top_bottom =  ' '*(max_len + 2*self.pad) + self.eol
 		for i in range(self.pad):
@@ -811,15 +1088,15 @@ class mazeify:
 			for i in range(3):
 				template2 += temp[i] + self.eol
 
+		# deprecated.  use self.replace instead.
+		##tighted edges in 9-cell rendering (ignore some microspace)
+		#tighten = [
+		#			('/  _', '/++_'),    # /_
+		#			('_  \\', '_++\\')   # _\
+		#		]
 
-		#tighted edges in 9-cell rendering (ignore some microspace)
-		tighten = [
-					('/  _', '/++_'),    # /_
-					('_  \\', '_++\\')   # _\
-				]
-
-		for (find,replace) in tighten:
-			template2 = template2.replace(find,replace)
+		#for (find,replace) in tighten:
+		#	template2 = template2.replace(find,replace)
 
 		return template2
 
@@ -851,17 +1128,108 @@ class mazeify:
 		return t2
 
 
+	# print board with all x,y indexes, for debugging
+	def dump(self):
+		for y,row in enumerate(self.board):
+			for x,c in enumerate(row):
+				print str((x,y)).ljust(10), c
+
+
 	# a temporary method for random testing
 	def kevtest(self):
-		self.use_microspace = True
-		t ='\ / | _ +'
+		self.use_microspace = False
+#fill pre [(55, 52)] /   0
+		t =r'''
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+tttrrriiiaaannngggllleeesss`````````iiimmmpppllliiieeeddd```wwwhhhiiittteeessspppaaaccceee``````````````````
+tttrrriiiaaannngggllleeesss```---```iiimmmpppllliiieeeddd```wwwhhhiiittteeessspppaaaccceee``````````````````
+tttrrriiiaaannngggllleeesss`````````iiimmmpppllliiieeeddd```wwwhhhiiittteeessspppaaaccceee``````````````````
+uuusssiiinnnggg```sssllloooppppppyyy```cccooonnnnnneeeccctttooorrrsss:::`````/`````````aaannnddd``````\`````
+uuusssiiinnnggg```sssllloooppppppyyy```cccooonnnnnneeeccctttooorrrsss:::````/``_```````aaannnddd````_``\````
+uuusssiiinnnggg```sssllloooppppppyyy```cccooonnnnnneeeccctttooorrrsss:::```+++___``````aaannnddd```___+++```
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+````````````````````````````````````````````````````````````````````````````````````````````````````````````
+`````````````_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_`````````````
+````````````____________________________________________________________________________________````````````
+````````````\          ++          ++          ++          ++          ++          ++          /````````````
+`````````````\        /  \        /  \        /  \        /  \        /  \        /  \        /`````````````
+``````````````\      /    \      /    \      /    \      /    \      /    \      /    \      /``````````````
+```````````````\    /      \    /      \    /      \    /      \    /      \    /      \    /```````````````
+````````````````\  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /````````````````
+`````````````````\+++______++++++______++++++______++++++______++++++______++++++______+++/`````````````````
+`````````````````++          ++          ++          ++          ++          ++          ++`````````````````
+````````````````/  \        /  \        /  \        /  \        /  \        /  \        /  \````````````````
+```````````````/    \      /    \      /    \      /    \      /    \      /    \      /    \```````````````
+``````````````/      \    /      \    /      \    /      \    /      \    /      \    /      \``````````````
+`````````````/  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \`````````````
+````````````+++______++++++______++++++______++++++______++++++______++++++______++++++______+++````````````
+````````````\          ++          ++          ++          ++          ++          ++          /````````````
+`````````````\        /  \        /  \        /  \        /  \        /  \        /  \        /`````````````
+``````````````\      /    \      /    \      /    \      /    \      /    \      /    \      /``````````````
+```````````````\    /      \    /      \    /      \    /      \    /      \    /      \    /```````````````
+````````````````\  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /````````````````
+`````````````````\+++______++++++______++++++______++++++______++++++______++++++______+++/`````````````````
+`````````````````++          ++          ++          ++          ++          ++          ++`````````````````
+````````````````/  \        /  \        /  \        /  \        /  \        /  \        /  \````````````````
+```````````````/    \      /    \      /    \      /    \      /    \      /    \      /    \```````````````
+``````````````/      \    /      \    /      \    /      \    /      \    /      \    /      \``````````````
+`````````````/  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \`````````````
+````````````+++______++++++______++++++______++++++______++++++______++++++______++++++______+++````````````
+````````````\          ++          ++          ++          ++          ++          ++          /````````````
+`````````````\        /  \        /  \        /  \        /  \        /  \        /  \        /`````````````
+``````````````\      /    \      /    \      /    \      /    \      /    \      /    \      /``````````````
+```````````````\    /      \    /      \    /      \    /      \    /      \    /      \    /```````````````
+````````````````\  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /````````````````
+`````````````````\+++______++++++______++++++______++++++______++++++______++++++______+++/`````````````````
+``````````````````\          ++          ++          ++          ++          ++          /``````````````````
+```````````````````\        /  \        /  \        /  \        /  \        /  \        /```````````````````
+````````````````````\      /    \      /    \      /    \      /    \      /    \      /````````````````````
+`````````````````````\    /      \    /      \    /      \    /      \    /      \    /`````````````````````
+``````````````````````\  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /``````````````````````
+```````````````````````\+++______++++++______++++++______++++++______++++++______+++/```````````````````````
+
+
+'''
+
+
+
 		self.parseTemplate(t,create_maze=False)
-		for i in range(9*3):
-			print "test",i	
-			print self.toString(raw=True)
-			self.setMacroChar(i,0,'|');
-			print self.toString(raw=True)
-			print "--"
+
+		#points = self.findChar('\\')
+		(x,y) = (57,52) 
+		#print points
+		block = self.getBlockAt(57,52,10,10)		
+		print block
+
+		#if (57,52) in points:
+		#	print "HIT"
+		#else:
+		#	print "MISS"
+		
+		#self.dump()
+
+		#print self.replace(['test','test'],['work','asdf'])
+		self.scan_diagonal = True
+		self.fill(x,y,'\\',' ')
+		#self.dump()
+		print self.toString()
+
+		#print self.findPattern(['est','est'])
+		#print self.hasPatternAt(['test0','test1','test2'],2,1)
+
+#		for i in range(9*3):
+#			print "test",i	
+#			print self.toString(raw=True)
+#			self.setMacroChar(i,0,'|');
+#			print self.toString(raw=True)
+#			print "--"
 
 
 # end class
@@ -886,6 +1254,14 @@ if __name__ == '__main__':
 
 	#  simple template parsing demos / regression tests
 	def demo(options):
+
+		# run through predefined regular shapes
+		print "predefined tessellations"
+		types = ['block','square']
+		for maze_type in types: 
+			options.maze = maze_type	
+			create_maze(options)
+		print "--"	
 
 		parsers = [] # custom parsing options
 		templates = [] # test templates
@@ -969,43 +1345,43 @@ if __name__ == '__main__':
 
     Salvidor Dali Melting Maze:
 	
-              ``````````````     ```````````````````````````````
-              `+---+---+---+-----+---+------+---+-----+---+```````
-             `/   /   /   /     /   /      /   /     /   /````````
-            `+---+---+---+-----+---+------+---+-----+---+------+`
-           `/   /   /   /     /   /      /   /     /   /      /```
-          `+---+---+---+-----+---+------+---+-----+---+------+````
-         `/   /   /   /     /   /      /   /     /   /      /`````
-        `+---+---+---+-----+---+------+---+-----+---+------+---+`
-       `/   /   /   /     /   /      /   /     /   /      /   /`
-      `+---+---+---+-----+---+------+---+-----+---+------+---+`
-     `/   /   /   /     /   /      /   /     /   /      /   /`
-    `+---+---+---+-----+---+------+---+-----+---+------+---+`
-   `/   /   /   /     /   /      /   /     /   /      /   /`
-  `+---+---+---+-----+---+------+---+-----+---+------+---+`
- `/   /   /   /     /   /      /   /     /   /      /   /`
-`+---+---+---+-----+---+------+---+-----+---+------+---+`
-````/   /   /     /   /      /   /     /   /      /   /`
-```+---+---+-----+----+-----+---+-----+---+------+---+`
-    ``/     \    /     \    /    \    /    \    /     \`
-    `+       +--+       +--+     +---+      +---+      +`
-    ``\     /    \     /    \    /    \     /    \    /`
-    ```+---+      +---+      +--+      +---+      +--+`
-    ``/     \    /     \    /    \    /     \    /    \`
-    `+       +--+       +--+      +---+      +--+      +`
-    ``\     /    \     /    \    /     \     /    \    /`
-    ```+---+      +---+      +--+       +---+      +--+`
-    ``/     \    /     \    /    \     /     \    /    \`
-    `+       +--+       +--+      +---+      +--+      +`
-    ``\     /    \     /    \    /     \     /    \    /`
-    ```+---+      +---+      +--+       +---+      +--+`
-    ``/     \    /     \    /    \     /     \    /``````
-    `+       +--+       +--+      +---+       +--+```
-    ``\     /````\     /    \    /     \     /```````
-    ```+---+ ````+---+       +---+      +---+```
-    ``````````````````\     /     \    /``````
-      `````````````````+---+       +--+``
-       `````````````````````\     |```
+                            
+               +---+---+---+`````+---+------+---+-----+---+       
+              /   /   /   /     /   /      /   /     /   /        
+             +---+---+---+-----+---+------+---+-----+---+------+ 
+            /   /   /   /     /   /      /   /     /   /      /   
+           +---+---+---+-----+---+------+---+-----+---+------+    
+          /   /   /   /     /   /      /   /     /   /      /     
+         +---+---+---+-----+---+------+---+-----+---+------+---+ 
+        /   /   /   /     /   /      /   /     /   /      /   / 
+       +---+---+---+-----+---+------+---+-----+---+------+---+ 
+      /   /   /   /     /   /      /   /     /   /      /   / 
+     +---+---+---+-----+---+------+---+-----+---+------+---+ 
+    /   /   /   /     /   /      /   /     /   /      /   / 
+   +---+---+---+-----+---+------+---+-----+---+------+---+ 
+  /   /   /   /     /   /      /   /     /   /      /   / 
+ +---+---+---+-----+---+------+---+-----+---+------+---+ 
+    /   /   /     /   /      /   /     /   /      /   / 
+   +---+---+-----+----+-----+---+-----+---+------+---+ 
+      /     \    /     \    /    \    /    \    /    \ 
+      \     /    \     /    \    /    \    /    \    / 
+       +---+------+---+------+--+------+--+-----+--+ 
+      /     \    /     \    /    \    /    \   /    \ 
+      \     /    \     /    \    /    \    /   \    / 
+       +---+      +---+      +--+      ++++    +--+ 
+      /     \    /     \    /    \    /    \  /    \ 
+     +       +--+       +--+      +--++     ++      + 
+      \     /    \     /    \    /     \   /  \    / 
+       +---+      +---+      +--+       +-+    ++++ 
+           \      /   \     /    \     /   \    /      
+            \    /     \   /      \   /     \  /      
+             +--+       +-+        +-+      +++   
+                 \     /   \      /   \      /       
+                  \   /     \    /     \    /       
+                   +-+       +--+       +--+
+                      \     /    \     /     
+                       +---+      +---+  
+                            \`````|   
 """	
 		templates.append(template)
 		parsers.append(None) # default parser
@@ -1016,40 +1392,40 @@ if __name__ == '__main__':
 		# be careful with trailing whitespace
 		# can use with the -z diagonal wall flag
 		template = r"""
-```````Help`Mr.`Food`Travel`Through`the`Intestines`;-)
-````````````````````````````````````````````````````````````````
-```start````````````````````````````````````````````````````````
-``````````\`````````````````````````````````````````````````````
-```\```````\```````____````````____`````````````````````````````
-````\       \____/      \____/      \____```````````````````````
-`````\      /    \      /    \      /    \``````````````````````
-``````\____/      \____/      \____/      \____`````````````````
-``````/    \      /    \      /    \      /    \````````````````
-`````/      \____/      \____/      \____/      \```````````````
-`````\      /    \      /    \      /    \      /```````````````
-``````\____/      \____/      \____/      \____/````````````````
-``````/    \      /    \      /    \      /    \````````````````
-`````/      \____/      \____/      \____/      \____```````````
-`````\      /    \      /    \      /    \      /    \``````````
-``````\____/      \____/      \____/      \____/      \____`````
-``````/    \      /    \      /    \      /    \      /    \````
-`````/      \____/      \____/      \____/      \____/      \```
-`````\      /    \      /    \      /    \      /    \      /```
-``````\____/      \____/      \____/      \____/      \____/````
-``````/    \      /    \      /    \      /    \      /    \````
-`````/      \____/      \____/      \____/      \____/      \```
-`````\      /    \      /    \      /    \      /    \      /```
-``````\____/      \____/      \____/      \____/      \____/````
-``````/    \      /    \      /    \      /    \      /    \````
-`````/      \____/      \____/      \____/      \____/      \```
-`````\      /    \      /    \      /    \      /    \      /```
-``````\____/      \____/      \____/      \____/      \____/````
-```````````\`     /    \      /    \      /    \      /    \````
-````````````\____/      \____/      \____/      \____/      \```
-`````````````````\`     /````\      /````\      /````\       \``
-``````````````````\____/``````\____/``````\____/``````\  end  \`
-```````````````````````````````````````````````````````\       \
-````````````````````````````````````````````````````````````````
+       Help Mr. Food Travel Through the Intestines ;-)
+                                                                
+   start                                                        
+          \                                                     
+   \```````\       ____        ____                             
+    \       \____/      \____/      \____                       
+     \      /    \      /    \      /    \                      
+      \____/      \____/      \____/      \____                 
+      /    \      /    \      /    \      /    \                
+     /      \____/      \____/      \____/      \               
+     \      /    \      /    \      /    \      /               
+      \____/      \____/      \____/      \____/                
+      /    \      /    \      /    \      /    \                
+     /      \____/      \____/      \____/      \____           
+     \      /    \      /    \      /    \      /    \          
+      \____/      \____/      \____/      \____/      \____     
+      /    \      /    \      /    \      /    \      /    \    
+     /      \____/      \____/      \____/      \____/      \   
+     \      /    \      /    \      /    \      /    \      /   
+      \____/      \____/      \____/      \____/      \____/    
+      /    \      /    \      /    \      /    \      /    \    
+     /      \____/      \____/      \____/      \____/      \   
+     \      /    \      /    \      /    \      /    \      /   
+      \____/      \____/      \____/      \____/      \____/    
+      /    \      /    \      /    \      /    \      /    \    
+     /      \____/      \____/      \____/      \____/      \   
+     \      /    \      /    \      /    \      /    \      /   
+      \____/      \____/      \____/      \____/      \____/    
+           \      /    \      /    \      /    \      /    \    
+            \____/      \____/      \____/      \____/      \   
+                 \      /    \      /    \      /    \       \  
+                  \____/      \____/      \____/      \  end  \ 
+                                                       \```````\
+                                                                
 """	
 		templates.append(template)
 
@@ -1058,57 +1434,6 @@ if __name__ == '__main__':
 		apply_options(maze,options)
 		maze.scan_diagonal = True
 		parsers.append(maze)
-
-#### test
-
-		# Note: On concave shapes, the scanner will try to connect opposite
-		# sides of the mouth. It just views the gap as another space it is
-		# supposed to cross.  The easiest approach to giving the template the
-		# correct "hints" to parse is (a) explicitly declare all external space
-		# as 'visited' and (b) explicitily punch holes where you want the start
-		# and end openings to be.
-		template = r'''
-    Example: irregular, multiple regions, text, holes, protected whitespace
-
-```````````````````````````````````+---+---+---+---+````````````````````````
-```````````````````````````````````|   |   |   |   |````````````````````````
-```````````````````````````+---+---+---+---+---+---+---+---+````````````````
-```````````````````````````|   |   |   |   |   |   |   |   |````````````````
-```````````````````````+---+---+---+---+---+---+---+---+---+---+````````````
-```````````````````````|   |   |   |   |   |   |   |   |   |   |````````````
-```````````````````+---+---+---+---+---+---+---+---+---+---+---+---+````````
-```````````````````|   |   |   |   |```````````|   |   |   |   |   |````````
-```````````````+---+---+---+---+---+```````````+---+---+---+---+---+---+````
-```````````````|   |   |   |   |   |```````````|   |   |   |   |   |   |````
-```````````````+---+---+---+---+---+```````````+---+---+---+---+---+---+````
-```````````````````|   |   |   |   |```````````|   |   |   |   |   |   |````
-```````````````````+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-`````start`````````````|   |   |   |   |   |   |   |   |   |   |   |   |   |
-`+---+---+---+`````````+---+---+---+---+---+---+---+---+---+---+---+---+---+
-`    |   |   |`````````````|   |   |   |   |   |   |   |   |   |   |   |   |
- +---+---+---+`````````````+---+---+---+---+---+---+---+---+---+---+---+---+
-`|   |   |   |````\`\`\````````|   |   |   |   |   |   |   |   |   |   |   |
-`+---+---+---+````/`/`/````````+---+---+---+---+---+---+---+---+---+---+---+
-`|   |   |    `````````````````    |   |   |   |   |   |   |   |   |   |   |
-`+---+---+---+`````````````+---+---+---+---+---+---+---+---+---+---+---+---+
-```````````````````````````|   |   |   |   |   |   |   |   |   |   |   |   |
-```````````````````````+---+---+---+---+---+---+---+---+---+---+---+---+---+
-```````````````````````|   |   |   |   |   |   |   |   |   |   |   |   |   |
-```````````````````+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
-```````````````````|   |   |   |   |   |   |   |   |   |   |   |   |   |````
-```````````````+---+---+---+---+---+---+---+---+---+---+---+---+---+---+````
-```````````````|   |   |   |   |   |   |   |   |   |   |   |   |   |   |````
-```````````````+---+---+---+---+---+---+---+---+---+---+---+---+---+---+````
-```````````````````|   |   |   |   |   |   |   |   |   |   |   |   |````````
-```````````````````+---+---+---+---+---+---+---+---+---+---+---+   +````````
-```````````````````````|   |   |   |   |   |   |   |   |   |   |````````end`
-```````````````````````+---+---+---+---+---+---+---+---+---+---+```````\`\`\
-```````````````````````````````|   |   |   |   |   |   |```````````````/`/`/
-```````````````````````````````+---+---+---+---+---+---+````````````````````
-'''
-
-		templates.append(template)
-		parsers.append(None) # default parser
 
 
 #### test
@@ -1147,6 +1472,8 @@ with microspace parsing
 		template = r"""
 
 triangles - implied whitespace
+using sloppy connectors: /_  and _\
+
     ____________________________
     \  /\  /\  /\  /\  /\  /\  / 
      \/__\/__\/__\/__\/__\/__\/  
@@ -1158,29 +1485,26 @@ triangles - implied whitespace
     /__\/__\/__\/__\/__\/__\/__\ 
     \  /\  /\  /\  /\  /\  /\  / 
      \/__\/__\/__\/__\/__\/__\/  
-     /\  /\  /\  /\  /\  /\  /\
-    /__\/__\/__\/__\/__\/__\/__\ 
-
-     /\/\/\/\/\/\/\/\/\/\/\
-    /\/\/\/\/\/\/\/\/\/\/\/
-    \/\/\/\/\/\/\/\/\/\/\/\
-    /\/\/\/\/\/\/\/\/\/\/\/
-    \/\/\/\/\/\/\/\/\/\/\/\
-    /\/\/\/\/\/\/\/\/\/\/\/
-    \/\/\/\/\/\/\/\/\/\/\/\
-    /\/\/\/\/\/\/\/\/\/\/\/
-    \/\/\/\/\/\/\/\/\/\/\/\
-    /\/\/\/\/\/\/\/\/\/\/\/
-    \/\/\/\/\/\/\/\/\/\/\/\
-    /\/\/\/\/\/\/\/\/\/\/\/
-    \/\/\/\/\/\/\/\/\/\/\/
-
-
+      \  /\  /\  /\  /\  /\  / 
+       \/__\/__\/__\/__\/__\/    
+       /\/\/\/\/\/\/\/\/\/\/\
+       \/\/\/\/\/\/\/\/\/\/\/
+       /\/\/\/\/\/\/\/\/\/\/\
+       \/\/\/\/\/\/\/\/\/\/\/
+       /\/\/\/\/\/\/\/\/\/\/\
+       \/\/\/\/\/\/\/\/\/\/\/
+       /\/\/\/\/\/\/\/\/\/\/\
+       \/\/\/\/\/\/\/\/\/\/\/
+       /\/\/\/\/\/\/\/\/\/\/\
+       \/\/\/\/\/\/\/\/\/\/\/
+       /\/\/\/\/\/\/\/\/\/\/\
+       \/\/\/\/\/\/\/\/\/\/\/
+        \/\/\/\/\/\/\/\/\/\/
 """	
-	
+
 		maze = mazeify()
 		apply_options(maze,options)
-		maze.length = 1
+		#maze.length = 1
 		maze.scan_diagonal = True
 		maze.use_microspace = True  
 		maze.close_implied_wall = True
@@ -1208,10 +1532,10 @@ note: contains no actual
  |_|_|_|_|_|_|_|_|_|_|_|_|_| 
  |_|_|_|_|_|_|_|_|_|_|_|_|_| 
  |_|_|_|_|_|_|_|_|_|_|_|_|_| 
-                             
+
 """	
 
-# quicker render
+# smaller template for quicker render
 		
 		template_alt = r"""
 _________________ 
@@ -1236,11 +1560,118 @@ _________________
 		# tune parser: set explicit wall length
 		maze = mazeify()
 		apply_options(maze,options)
-		maze.length = 1
+		#maze.length = 1
 		maze.use_microspace = True  
 		maze.close_implied_wall = True  
 		#maze.dot_last_underscore = True   # sharpen corners _ -> _.
 		parsers.append(maze)
+
+
+
+#### test
+
+		template = r"""
+
+Mr smiley
+                    __    __    __    __                          
+                 __/  \__/  \__/  \__/  \__                       
+              __/  \__/  \__/  \__/  \__/  \__                    
+           __/  \__/  \__/  \__/  \__/  \__/  \__                 
+start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__              
+     __/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \             
+    `  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/              
+    \__/  \__/        \__/  \__/  \__/        \__/  \__   
+  __/  \__/  \ ~      /  \__/  \__/  \ ~      /  \__/  \__ 
+ /  \__/  \__/        \__/  \__/  \__/        \__/  \__/  \
+ \__/  \__/  \__    __/  \__/  \__/  \__    __/  \__/  \__/
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  `  end
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__` 
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+ /  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \
+ \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/  \__/
+ /  \__/        \__/  \__/        \__/  \__/        \__/  \
+ \__/              \__/              \__/              \__/
+ 
+
+"""	
+	
+		templates.append(template)
+
+		# tune parser: set explicit wall length
+		maze = mazeify()
+		apply_options(maze,options)
+		#maze.length = 1
+		maze.use_microspace = True  
+		#maze.dot_last_underscore = True   # sharpen corners _ -> _.
+		parsers.append(maze)
+
+
+#### test
+
+		# Note: On concave shapes, the scanner will try to connect opposite
+		# sides of the mouth. It just views the gap as another space it is
+		# supposed to cross.  The easiest approach to giving the template the
+		# correct "hints" to parse is (a) explicitly declare all external space
+		# as 'visited' and (b) explicitily punch holes where you want the start
+		# and end openings to be.
+		template = r'''
+    Example: irregular, multiple regions, text, holes, protected whitespace
+
+                                   +---+---+---+---+                        
+                                   |   |   |   |   |                        
+                           +---+---+---+---+---+---+---+---+                
+                           |   |   |   |   |   |   |   |   |                
+                       +---+---+---+---+---+---+---+---+---+---+            
+                       |   |   |   |   |   |   |   |   |   |   |            
+                   +---+---+---+---+---+---+---+---+---+---+---+---+        
+                   |   |   |   |   |           |   |   |   |   |   |        
+               +---+---+---+---+---+           +---+---+---+---+---+---+    
+               |   |   |   |   |   |           |   |   |   |   |   |   |    
+               +---+---+---+---+---+           +---+---+---+---+---+---+    
+                   |   |   |   |   |         ~ |   |   |   |   |   |   |    
+                   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+     start             |   |   |   |   |   |   |   |   |   |   |   |   |   |
+ +---+---+---+         +---+---+---+---+---+---+---+---+---+---+---+---+---+
+ `   |   |   |             |   |   |   |   |   |   |   |   |   |   |   |   |
+ +---+---+---+             +---+---+---+---+---+---+---+---+---+---+---+---+
+ |   |   |   |    \ \ \        |   |   |   |   |   |   |   |   |   |   |   |
+ +---+---+---+    / / /        +---+---+---+---+---+---+---+---+---+---+---+
+ |   |   |   `                 `   |   |   |   |   |   |   |   |   |   |   |
+ +---+---+---+             +---+---+---+---+---+---+---+---+---+---+---+---+
+                           |   |   |   |   |   |   |   |   |   |   |   |   |
+                       +---+---+---+---+---+---+---+---+---+---+---+---+---+
+                       |   |   |   |   |   |   |   |   |   |   |   |   |   |
+                   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+                   |   |   |   |   |   |   |   |   |   |   |   |   |   |    
+               +---+---+---+---+---+---+---+---+---+---+---+---+---+---+    
+               |   |   |   |   |   |   |   |   |   |   |   |   |   |   |    
+               +---+---+---+---+---+---+---+---+---+---+---+---+---+---+    
+                   |   |   |   |   |   |   |   |   |   |   |   |   |        
+                   +---+---+---+---+---+---+---+---+---+---+---+```+        
+                       |   |   |   |   |   |   |   |   |   |   |        end 
+                       +---+---+---+---+---+---+---+---+---+---+       \ \ \
+                               |   |   |   |   |   |   |               / / /
+                               +---+---+---+---+---+---+                    
+'''
+
+		templates.append(template)
+		parsers.append(None) # default parser
+
 
 #### end test
 
@@ -1359,7 +1790,6 @@ _________________
 
 #	parser.add_option('-c', '--curviness', action='store', dest='curviness', type="int",
 #		help='curviness [0,100]', default=100)
-
 
 	parser.add_option('--kevtest', action='store_true', dest='kevtest',
 		help='run a temporary test function', default=False)
