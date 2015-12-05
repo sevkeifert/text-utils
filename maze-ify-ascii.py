@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-
-#TODO: debug diagonal fill / \
+#
 # Kevin Seifert - GPL v2 2015
 #
 # This script turns an ASCII tessellation into a maze.
@@ -12,13 +11,12 @@
 # '+' is the delimiter.  Otherwise, the parser doesn't know where
 # the wall segment ends or begins.
 #
-# Also, be careful on using _ (underscore) in your template.  It
-# looks like mostly whitespace, but it is a solid wall for the
-# entire cell.
+# Use the self.visited char (`) to create a line as that the parser will not
+# cross.
 #
-# Use the self.avoid char (~) to prevent scanner from traversing
-# whitespace inside a region.  For example, to prevent the parser
-# from puncturing a wall to room inside  a shape.
+# Use the self.avoid char (~) to prevent scanner from traversing any whitespace
+# inside a region.  For example, to prevent the parser from puncturing a wall
+# to room inside  a shape.
 #
 # COMMAND LINE USAGE:
 #
@@ -638,7 +636,6 @@ class mazeify:
 
 			# end for points
 
-
 			# save snapshot of all new neighboring points encountered
 			for (x3,y3) in this_scan:
 				for (dx,dy) in deltas:
@@ -876,7 +873,7 @@ class mazeify:
 					c = self.get(x3,y3)
 					
 					#replace = self.getReplaceChar(x3,y3,dx,dy,c)
-					replace = self.visited
+					replace = self.unvisited
 					
 					changed = self.fill(x3,y3,c,replace) # hulk smash!
 					walls_changed += changed
@@ -1170,12 +1167,13 @@ if __name__ == '__main__':
 	def demo(options):
 
 		# run through predefined regular shapes
-		print "predefined tessellations"
-		types = ['block','square']
-		for maze_type in types: 
-			options.maze = maze_type	
-			create_maze(options)
-		print "--"	
+		if options.test == -1:
+			print "predefined tessellations"
+			types = ['block','square']
+			for maze_type in types: 
+				options.maze = maze_type	
+				create_maze(options)
+			print "--"	
 
 		parsers = [] # custom parsing options
 		templates = [] # test templates
