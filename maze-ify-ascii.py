@@ -164,8 +164,8 @@ class mazeify:
 
 			#'+' :
 			#      [ ' + ' , # use solid corner instead
-			#       '+++' ,
-			#       ' + ' ],
+			#        '+++' ,
+			#        ' + ' ],
 
 			# all others are solid blocks
 		}
@@ -200,7 +200,6 @@ class mazeify:
 
 		for line in lines:
 			cells = list(line)
-			#cells = list(line) + ([' ']*(max_len-tmp))
 			self.board.append(cells)
 
 		if create_maze:
@@ -270,7 +269,6 @@ class mazeify:
 	def getMacroCharIdPos(self,x,y):
 		# snap to first multiple of 3	
 		(x0,y0) = self.getMacroCharTopLeftPos(x,y)
-		#print "macro cell" , (x,y),(x0,y0)
 		return (x0+1,y0+1)
 
 
@@ -285,31 +283,6 @@ class mazeify:
 
 		return c
 
-
-#	# set value(s) at board at x,y, in macro/micro space
-#	def setMacroChar(self,x,y,value):
-#		
-#		# set entire 9-grid, find upper left
-#		x0 = x/3 * 3
-#		y0 = y/3 * 3
-#		chars = self.getMacroCharMap(value)
-#		for i in range(3):
-#			for j in range(3):
-#				self.set(x0+j,y0+1,chars[i][j])
-
-# alt: find change in boundary
-#		# 9 cell -> 1 cell conversion
-#		(x0,y0) = self.getMacroCharTopLeftPos(x,y)
-#
-#		chars = self.getMacroCharMap(c)
-#		for i in range(3):
-#			for j in range(3):
-#				c1 = chars[i][j] # should be
-#				c2 = self.get(x0+j,y0+1) # is
-#				if ( c1 != ' ' and c1 != c2 ):
-#					# char has been changed, return diff
-#					return c2
-#
 
 	# set value at board at x,y
 	def set(self, x, y, value):
@@ -359,48 +332,12 @@ class mazeify:
 			for j in range(3):
 				for i in range(3):
 					c2 = charmap_old[j][i]
-					#print "old charmap value", charmap_old,  c2
 					if c2 != ' ':
 						(x4,y4) = (x2+i,y2+j)
 						self.board[y4][x4] = value
 						changed.append((x4,y4))
 
 		return changed # all points updated
-
-
-	# vertical walls are also implied horizonal boundaries.  for example:
-	# breaking "|_" will result in " _".
-	# this method can transform vertical wall breaks to _
-	def getReplaceChar(self,x,y,dx,dy,char):
-
-		#return self.unvisited # to disable
-
-		# ignore implied horizonal walls
-		if not self.close_implied_wall:
-			return self.unvisited
-
-		if not (char in self.walls_vert):
-			return self.unvisited 
-
-		c1 = ''
-		c2 = ''
-		if self.use_microspace:
-			# TODO: test this more
-			# look at macro char primary value only	
-			char = self.getMacroCharValue(x,y)
-			c1 = self.getMacroCharValue(x+3,y)
-			c2 = self.getMacroCharValue(x-3,y)
-		else:
-			c1 = self.get(x-1,y)
-			c2 = self.get(x+1,y)
-
-		# check horizontal neighbors directly
-		# transform from  \_, |_, /_  to  __
-		if '_' in [c1,c2]:
-			return '_'
-
-		# default		
-		return self.unvisited
 
 
 	# find all points matching a given character
@@ -492,14 +429,6 @@ class mazeify:
 		return points
 
 
-	# return a set of all wall charactuers used in a string template
-	def getWallCharsUsed(self,string):
-		walls = Set([])
-		for c in string:
-			if c in self.walls and not (c in chars):
-				walls.add(c)	
-
-
 	# get a block of chars starting at top-left x,y, with width,height w,h 
 	# returns an array of lines 
 	def getBlockAt(self,x,y,w,h):
@@ -514,12 +443,10 @@ class mazeify:
 
 	# 2d set: set a rectangular block pattern in the board at x,y.
 	def setBlock(self, x, y, pattern):
-		#print x,y,pattern
 		h = len(pattern)
 		w = len(pattern[0])
 		for j in xrange(h):
 			for i in xrange(w):
-				#print 'SET', x+i, y+j, pattern[j][i]
 				self.set(x+i, y+j, pattern[j][i])
 
 
@@ -547,12 +474,14 @@ class mazeify:
 			print self.toString(raw=True)
 
 
-	# deprecated.
+	# deprecated.  use non-recursive self.fillPoints() instead.
 	# fill region with a char, finding pattern and replacing.
 	def fillRecursive(self,x,y,find,replace,level=0,data=None):
 
-		if level == 0:
+		if data == None:
 			data = []
+
+		if level == 0:
 			if len(find) != len(replace):
 				print 'Warn: lengths differ. "'+find+'" -> "'+replace+'"'
 			if find == replace:
@@ -603,8 +532,6 @@ class mazeify:
 		return data
 
 
-		
-
 	# fill region with char, finding pattern and replacing.  (like
 	# "fill polygon" in a paint program, finds boundaries) this is
 	# a replacement for self.fillRecursive(), where the old function
@@ -626,7 +553,7 @@ class mazeify:
 	# like self.fill, but accepts mulitple points.
 	def fillPoints(self, points, find, replace, level=0, data=None):
 
-		if level == 0:
+		if data == None:
 			data = []
 
 		if len(find) != len(replace):
@@ -680,30 +607,12 @@ class mazeify:
 						if c != find:
 							break #not a match
 
-						#if not self.inBounds(x2,y2):
-						#	break #off the board
-
-						#if (x2,y2) in data:
-						#	break # meh, already checked
-
 						# pattern was found!
 						self.set(x2,y2,replace)
-
-						# TODO: test more
-						## this can update by macrospace char, but a normal fill
-						## should work, since all contained chars are contiguous.
-						#if self.use_microspace:
-						#	checked += self.setMacroChar(x2,y2,replace)
-						#else:	
-						#	self.set(x2,y2,replace)
-						# track changes
-						#for p in checked:
-						#	if not ( p in data ):
 
 						# don't retest this cell	
 						data.append((x2,y2))
 						this_scan.append((x2,y2))
-						# end for
 
 						# count removed wall segments to allow for implicit
 						# wall boundaries.  set with -l flag
@@ -853,8 +762,6 @@ class mazeify:
 			#[ ['`_``', '+++`', '`|``'] , ['````', '+++`', '`|``'] ],
 
 
-
-
 			# add more rules here ...
 
 		]	
@@ -886,7 +793,6 @@ class mazeify:
 			for x in xrange(w/2,w):
 				c = self.get(x,y)
 				if c == self.unvisited:
-					#print "start at " , (x,y)
 				 	self.walk(x,y,0,data)	
 
 		# scan all cells
@@ -1138,83 +1044,19 @@ class mazeify:
 	# a temporary method for random testing
 	def kevtest(self):
 		self.use_microspace = False
-#fill pre [(55, 52)] /   0
 		t =r'''
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-tttrrriiiaaannngggllleeesss`````````iiimmmpppllliiieeeddd```wwwhhhiiittteeessspppaaaccceee``````````````````
-tttrrriiiaaannngggllleeesss```---```iiimmmpppllliiieeeddd```wwwhhhiiittteeessspppaaaccceee``````````````````
-tttrrriiiaaannngggllleeesss`````````iiimmmpppllliiieeeddd```wwwhhhiiittteeessspppaaaccceee``````````````````
-uuusssiiinnnggg```sssllloooppppppyyy```cccooonnnnnneeeccctttooorrrsss:::`````/`````````aaannnddd``````\`````
-uuusssiiinnnggg```sssllloooppppppyyy```cccooonnnnnneeeccctttooorrrsss:::````/``_```````aaannnddd````_``\````
-uuusssiiinnnggg```sssllloooppppppyyy```cccooonnnnnneeeccctttooorrrsss:::```+++___``````aaannnddd```___+++```
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````````````
-`````````````_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_``_`````````````
-````````````____________________________________________________________________________________````````````
-````````````\          ++          ++          ++          ++          ++          ++          /````````````
-`````````````\        /  \        /  \        /  \        /  \        /  \        /  \        /`````````````
-``````````````\      /    \      /    \      /    \      /    \      /    \      /    \      /``````````````
-```````````````\    /      \    /      \    /      \    /      \    /      \    /      \    /```````````````
-````````````````\  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /````````````````
-`````````````````\+++______++++++______++++++______++++++______++++++______++++++______+++/`````````````````
-`````````````````++          ++          ++          ++          ++          ++          ++`````````````````
-````````````````/  \        /  \        /  \        /  \        /  \        /  \        /  \````````````````
-```````````````/    \      /    \      /    \      /    \      /    \      /    \      /    \```````````````
-``````````````/      \    /      \    /      \    /      \    /      \    /      \    /      \``````````````
-`````````````/  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \`````````````
-````````````+++______++++++______++++++______++++++______++++++______++++++______++++++______+++````````````
-````````````\          ++          ++          ++          ++          ++          ++          /````````````
-`````````````\        /  \        /  \        /  \        /  \        /  \        /  \        /`````````````
-``````````````\      /    \      /    \      /    \      /    \      /    \      /    \      /``````````````
-```````````````\    /      \    /      \    /      \    /      \    /      \    /      \    /```````````````
-````````````````\  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /````````````````
-`````````````````\+++______++++++______++++++______++++++______++++++______++++++______+++/`````````````````
-`````````````````++          ++          ++          ++          ++          ++          ++`````````````````
-````````````````/  \        /  \        /  \        /  \        /  \        /  \        /  \````````````````
-```````````````/    \      /    \      /    \      /    \      /    \      /    \      /    \```````````````
-``````````````/      \    /      \    /      \    /      \    /      \    /      \    /      \``````````````
-`````````````/  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \`````````````
-````````````+++______++++++______++++++______++++++______++++++______++++++______++++++______+++````````````
-````````````\          ++          ++          ++          ++          ++          ++          /````````````
-`````````````\        /  \        /  \        /  \        /  \        /  \        /  \        /`````````````
-``````````````\      /    \      /    \      /    \      /    \      /    \      /    \      /``````````````
-```````````````\    /      \    /      \    /      \    /      \    /      \    /      \    /```````````````
-````````````````\  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /````````````````
-`````````````````\+++______++++++______++++++______++++++______++++++______++++++______+++/`````````````````
-``````````````````\          ++          ++          ++          ++          ++          /``````````````````
-```````````````````\        /  \        /  \        /  \        /  \        /  \        /```````````````````
-````````````````````\      /    \      /    \      /    \      /    \      /    \      /````````````````````
-`````````````````````\    /      \    /      \    /      \    /      \    /      \    /`````````````````````
-``````````````````````\  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /  _  _  \  /``````````````````````
-```````````````````````\+++______++++++______++++++______++++++______++++++______+++/```````````````````````
 
+a test template
 
 '''
-
-
 
 		self.parseTemplate(t,create_maze=False)
 
 		#points = self.findChar('\\')
-		(x,y) = (57,52) 
 		#print points
 		block = self.getBlockAt(57,52,10,10)		
 		print block
-
-		#if (57,52) in points:
-		#	print "HIT"
-		#else:
-		#	print "MISS"
-		
 		#self.dump()
-
 		#print self.replace(['test','test'],['work','asdf'])
 		self.scan_diagonal = True
 		self.fill(x,y,'\\',' ')
@@ -1231,6 +1073,78 @@ uuusssiiinnnggg```sssllloooppppppyyy```cccooonnnnnneeeccctttooorrrsss:::```+++__
 #			print self.toString(raw=True)
 #			print "--"
 
+
+## unused
+#	# set value(s) at board at x,y, in macro space
+#	def setMacroChar(self,x,y,value):
+#		
+#		# set entire 9-grid, find upper left
+#		(x0, y0) = self.getMacroCharTopLeftPos(); 
+#		chars = self.getMacroCharMap(value)
+#		for i in range(3):
+#			for j in range(3):
+# 				c = chars[i][j];
+#				if ( c != self.unvisited ):
+#					self.set(x0+j,y0+1,c)
+#
+#
+#	# collision detection
+#	def getMacroCharChanges(self,x,y,value):
+#		# 9 cell -> 1 cell conversion
+#		(x0,y0) = self.getMacroCharTopLeftPos(x,y)
+#		diff = []
+#		chars = self.getMacroCharMap(c)
+#		for i in range(3):
+#			for j in range(3):
+#				c1 = chars[i][j] # should be
+#				c2 = self.get(x0+j,y0+1) # is
+#				if ( c1 != ' ' and c1 != c2 ):
+#					# char has changed, add to diff
+#					diff.append(x0+j,y0+1)
+#		return diff
+#
+#
+#	# vertical walls are also implied horizonal boundaries.  for example:
+#	# breaking "|_" will result in " _".
+#	# this method can transform vertical wall breaks to _
+#	def getReplaceChar(self,x,y,dx,dy,char):
+#
+#		#return self.unvisited # to disable
+#
+#		# ignore implied horizonal walls
+#		if not self.close_implied_wall:
+#			return self.unvisited
+#
+#		if not (char in self.walls_vert):
+#			return self.unvisited 
+#
+#		c1 = ''
+#		c2 = ''
+#		if self.use_microspace:
+#			# TODO: test this more
+#			# look at macro char primary value only	
+#			char = self.getMacroCharValue(x,y)
+#			c1 = self.getMacroCharValue(x+3,y)
+#			c2 = self.getMacroCharValue(x-3,y)
+#		else:
+#			c1 = self.get(x-1,y)
+#			c2 = self.get(x+1,y)
+#
+#		# check horizontal neighbors directly
+#		# transform from  \_, |_, /_  to  __
+#		if '_' in [c1,c2]:
+#			return '_'
+#
+#		# default		
+#		return self.unvisited
+#
+#
+#	# return a set of all wall charactuers used in a string template
+#	def getWallCharsUsed(self,string):
+#		walls = Set([])
+#		for c in string:
+#			if c in self.walls and not (c in chars):
+#				walls.add(c)	
 
 # end class
 
