@@ -128,6 +128,7 @@ class mazeify:
 		# style tweaks
 		self.dot_last_underscore = False  # transform "_ " -> "_."?
 		self.close_implied_wall = False  # on remove vert, \_, |_, /_  to "__"?
+		self.bias = {} # track bias in walk pattern 
 
 		# parse space inside cell for micro-templates.
 		# all chars cells will be converted to 9 cells, where
@@ -804,11 +805,27 @@ class mazeify:
 				print "**** imagePostProcess complete ****"
 
 
+	# return a random set of deltas, corrected for bias (least used first)
+	def getDeltas(self):
+	
+		deltas = list(self.deltas) # make a random copy
+		shuffle(deltas)
+
+		if len(self.bias) > 0:
+			# put least used up front
+			rare = min(self.bias, key=self.bias.get)
+			deltas.remove(rare)
+			deltas = [rare] + deltas;
+
+		return deltas;
+
+
 	# walk around, knock down walls starting at x,y position
 	def walk(self,x=0,y=0,level=0,data=None):
 
 		if level == 0:
 			data = []
+			self.bias = {} # reset walk biases
 
 		## optimize walk: only run one full scan on each space
 		if (x,y) in data:
@@ -819,14 +836,17 @@ class mazeify:
 		c = self.get(x,y) # current char
 
 		# scan pattern
-		deltas = list(self.deltas) # make copy
-
-		#if randint( 0, 100 ) < self.curviness:
-		shuffle(deltas)
-
+		deltas = self.getDeltas() 
 		for delta in deltas:
-			
+
+			if not (delta in self.bias):
+				self.bias[delta] = 1
+			else:
+				self.bias[delta] += 1
+	
 			(dx,dy) = delta
+
+
 			x2 = x
 			y2 = y
 			foundwall = False	
