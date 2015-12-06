@@ -118,7 +118,6 @@ class mazeify:
 		self.corners = ['+'] # protect corner, prevent path from passing through
 		self.thickness = 1 # max thickness of wall
 		self.length = -1 # max length of wall segment
-		#self.curviness = 100 # percent of direction change. 0 - 100 (always)
 
 		# cell flags
 		self.space = ' ' # empty path (for display)
@@ -195,12 +194,6 @@ class mazeify:
 			template = template.replace("\n",self.eol) # nix
 
 		lines = template.split(self.eol)
-
-		max_len = 0
-		for line in lines:
-			tmp = len(line)
-			if tmp > max_len:
-				max_len = tmp
 
 		for line in lines:
 			cells = list(line)
@@ -1093,11 +1086,7 @@ class mazeify:
 		# add whitespace frame, clean up right end
 		# frame will allow detecting "outside" of shape with fill
 		lines = template.split(self.eol)
-		max_len = 0
-		for line in lines: # find maximum line lenght
-			tmp = len(line.rstrip())
-			if tmp > max_len:
-				max_len = tmp
+		max_len = len(max(lines, key=len)) # longest string length
 		template2 = ''
 		top_bottom =  ' '*(max_len + 2*self.pad) + self.eol
 		for i in range(self.pad):
@@ -1111,7 +1100,7 @@ class mazeify:
 			template2 += top_bottom
 
 
-		# deprecated.  use self.replace instead.
+		# deprecated.  use self.replace or imagePreProcess instead.
 		##tighted edges in 9-cell rendering (ignore some microspace)
 		#tighten = [
 		#			('/  _', '/++_'),    # /_
@@ -1160,7 +1149,7 @@ class mazeify:
 
 
 	# a temporary method for random testing
-	def kevtest(self):
+	def unittest(self):
 		self.use_microspace = False
 
 		self.tessellate(10,10,'oblique')
@@ -1284,7 +1273,6 @@ if __name__ == '__main__':
 		maze.use_microspace = options.use_microspace
 		maze.close_implied_wall = not options.no_close_implied_wall
 		maze.scan_diagonal = not options.no_zigzag
-		#maze.curviness = options.curviness
 
 
 	#  simple template parsing demos / regression tests
@@ -1590,6 +1578,12 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 		print out
 
 
+	# what maze types are predefined?
+	def list_maze_types():
+		maze = mazeify()
+		return str(sorted(maze.maze_types))
+
+
 	# main ...
 	sys.setrecursionlimit(100000)
  	# parse cli options, parsing hints
@@ -1598,46 +1592,46 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 	parser.add_option('-f', '--file', action='store', dest='filename',
 		help='ASCII template file', default='')
 	parser.add_option('-d', '--debug', action='store_true', dest='debug',
-		help='enable debug', default=False)
-	parser.add_option('-t', '--thickness', action='store', type="int",
-		dest='thickness', help='wall thickness', default=1)
+		help='Enable debug', default=False)
+	parser.add_option('-t', '--thickness', action='store', type="int", dest='thickness', 
+		help='Wall thickness', default=1)
 	parser.add_option('-l','--length', action='store', dest='length', type="int",
-		help="max wall segment length", default=-1)
+		help="Max wall segment length", default=-1)
 	parser.add_option('-z', '--no-zigzag', action='store_true', dest='no_zigzag',
 		help='Do not break diagonally joined walls', default=False)
 	parser.add_option('-W', '--width', action='store', dest='width', type="int",
-		help='width', default=15)
+		help='Width', default=15)
 	parser.add_option('-H', '--height', action='store', dest='height', type="int",
-		help='height', default=15)
+		help='Height', default=15)
 	parser.add_option('-m', '--maze', action='store', dest='maze',
-		help='create a basic maze. options: square', default='')
+		help='Create a predefined maze. options: ' + list_maze_types(), default='')
 
 	parser.add_option('-s', action='store_true', dest='use_microspace',
-		help="parse the microspace within a single character (for example _)", default=False)
+		help="Parse the microspace within a single character (for example _ is mostly visual whitespace).", default=False)
 
 	parser.add_option('--no-wall-scan', action='store_true', dest='no_wall_scan',
-		help="don't scan any space that was previously taken by a wall", default=False)
+		help="Don't scan any space that was previously taken by a wall.", default=False)
 	parser.add_option('--test', action='store', dest='test', type='int',
-		help='only parse one test template (for regression testing)', default=-1)
+		help='Only parse one test template (for regression testing).', default=-1)
 
 	parser.add_option('--dot-last-underscore', action='store_true', dest='dot_last_underscore',
-		help='add a dot . decorator to last underscore in a segment.', default=False)
+		help='Add a dot . decorator to last underscore in a segment.', default=False)
 
 	parser.add_option('--no-close-implied-wall', action='store_true', dest='no_close_implied_wall',
-		help='do not preserve implied horizontal walls _|_/_\\_  -> ______', default=False)
+		help='Do not preserve implied horizontal walls (such as _|_/_\\_  -> ______).  With this option, vertical walls are replaced with spaces only.', default=False)
+
+	parser.add_option('--unittest', action='store_true', dest='unittest',
+		help='Run a temporary test function maze.unittest()', default=False)
 
 #	parser.add_option('-c', '--curviness', action='store', dest='curviness', type="int",
 #		help='curviness [0,100]', default=100)
 
-	parser.add_option('--kevtest', action='store_true', dest='kevtest',
-		help='run a temporary test function', default=False)
-
 	options, args = parser.parse_args()
 
-	if options.kevtest:
+	if options.unittest:
 	 	maze = mazeify()
 		apply_options(maze,options)
-		maze.kevtest()	
+		maze.unittest()	
 
 	elif options.filename != '':
 		parse_file(options)
