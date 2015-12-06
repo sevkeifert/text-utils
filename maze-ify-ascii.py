@@ -265,7 +265,7 @@ class mazeify:
 	# macro char (9-cell) start point
 	def getMacroCharTopLeftPos(self,x,y):
 		# snap to first multiple of 3	
-		(x0,y0) = ((x/3)*3,(y/3)*3)
+		(x0,y0) = (self.pad + ((x-self.pad)/3)*3, self.pad+((y-self.pad)/3)*3)
 		return (x0,y0)
 
 
@@ -1072,16 +1072,32 @@ class mazeify:
 	# template to a character array represented by self.board.
 	def transform(self, template):
 
-		lines = template.split(self.eol)
+		if self.use_microspace:
+			# optional: convert 1-cell -> 9-cell
+			lines = template.split(self.eol)
+			template2 = ''
 
+			for line in lines:
+				# sub lines
+				temp = ['','','']	
+				for c in line:
+					chars = self.getMacroCharMap(c)
+					for i in range(3):
+						temp[i] += chars[i]	
+
+				for i in range(3):
+					template2 += temp[i] + self.eol
+
+			template = template2
+		
+		# add whitespace frame, clean up right end
+		# frame will allow detecting "outside" of shape with fill
+		lines = template.split(self.eol)
 		max_len = 0
 		for line in lines: # find maximum line lenght
 			tmp = len(line.rstrip())
 			if tmp > max_len:
 				max_len = tmp
-
-		# add whitespace frame, clean up right end
-		# frame will allow detecting "outside" of shape with fill
 		template2 = ''
 		top_bottom =  ' '*(max_len + 2*self.pad) + self.eol
 		for i in range(self.pad):
@@ -1093,24 +1109,7 @@ class mazeify:
 			template2 += ' '*self.pad + line + ' '*(self.pad+max_len-tmp) + self.eol
 		for i in range(self.pad):
 			template2 += top_bottom
-	
-		if not self.use_microspace:
-			return template2
 
-		# optional: convert 1-cell -> 9-cell
-		lines = template2.split(self.eol)
-		template2 = ''
-
-		for line in lines:
-			# sub lines
-			temp = ['','','']	
-			for c in line:
-				chars = self.getMacroCharMap(c)
-				for i in range(3):
-					temp[i] += chars[i]	
-
-			for i in range(3):
-				template2 += temp[i] + self.eol
 
 		# deprecated.  use self.replace instead.
 		##tighted edges in 9-cell rendering (ignore some microspace)
@@ -1129,6 +1128,16 @@ class mazeify:
 	# 9-cell -> 1-cell for entire string.
 	def inverse_transform(self, transform):
 
+		#slice off top, bottom
+		lines = transform.split(self.eol2)
+		lines = lines[self.pad : -self.pad]
+		t2 = ''
+		for line in lines:
+			#slice off left, right
+			t2 += line[self.pad : -self.pad] + self.eol2
+		transform = t2
+
+		# compress 9-cell -> 1-cell
 		if self.use_microspace:
 			t2 = ''
 			lines = transform.split(self.eol2)
@@ -1140,15 +1149,6 @@ class mazeify:
 					t2 += self.eol2
 			transform = t2
 
-		lines = transform.split(self.eol2)
-
-		#slice off top, bottom
-		lines = lines[self.pad : -self.pad]
-		t2 = ''
-		for line in lines:
-			#slice off left, right
-			t2 += line[self.pad : -self.pad] + self.eol2
-		
 		return t2
 
 
