@@ -34,7 +34,8 @@
 #
 # OPTIONS:
 #
-#    see -h for help
+#    see -h for help and options.  You can give the parser hints about how to
+#    parse the template file (for example, restricting wall lengths)
 #
 #
 # TEMPLATE EXAMPLES:
@@ -127,7 +128,7 @@ class mazeify:
 
 		# style tweaks
 		self.dot_last_underscore = False  # transform "_ " -> "_."?
-		self.close_implied_wall = False  # on remove vert, \_, |_, /_  to "__"?
+		self.close_implied_wall = False  # break wall \_, |_, /_  as "__"?
 		self.bias = {} # track bias in walk pattern 
 
 		# parse space inside cell for micro-templates.

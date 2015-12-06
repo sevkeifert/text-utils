@@ -20,7 +20,7 @@ maze.py
 > Draws a basic ASCII maze.  Accepts width, height and difficulty parameters.
 
 maze-ify-ascii.py
-> This script turns an ASCII tessellation into a maze.
+> This script turns an ASCII tessellation into a maze.  The class includes methods for graphically manipulating text data, such as fill, 2D find/replace, parsing space withing character cell, edge filters, and interior/exterior detection of closed shapes.
  
 svi
 > secure vi text editor - to allow editing/viewing AES encrypted files from the command line.  (Bash script)
