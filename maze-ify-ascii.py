@@ -104,7 +104,7 @@ class mazeify:
 		self.board = [[]] # char array for maze. note: 0,0 is top left
 
 		self.deltas = [(0,-1),(0,1),(-1,0),(1,0)] # scan/fill directions: N S E W
-		self.scan_diagonal = True # break diagonal wall patterns - experimental
+		self.scan_diagonal = True # break diagonal wall patterns
 		self.zdeltas = [(1,-1),(-1,-1),(1,1),(-1,1)] + self.deltas # NW NE SW SE
 		self.eol = '\n' # expected end-of-line in template
 		self.eol2 = '\n' # rendered end-of-line in ouput
@@ -128,8 +128,12 @@ class mazeify:
 
 		# style tweaks
 		self.dot_last_underscore = False  # transform "_ " -> "_."?
-		self.close_implied_wall = False  # break wall \_, |_, /_  as "__"?
+		self.close_implied_wall = True  # break wall \_, |_, /_  as "__"?
 		self.bias = {} # track bias in walk pattern 
+
+		# available pre-defined maze tessellations
+		self.maze_types = [ 'square', 'micro','block','oblique','oblique2',
+							'hex','hex2','triangle','diamond']
 
 		# parse space inside cell for micro-templates.
 		# all chars cells will be converted to 9 cells, where
@@ -925,10 +929,17 @@ class mazeify:
 	# generate basic ASCII tessellations
 	def tessellate(self, w, h, type='square'):
 
+		if not (type in self.maze_types):
+			print 'Error: maze_type not defined. '
+			print 'The tessellation type must be one of the following:'
+			print self.maze_types
+			return ''	
+
 		#all patterns
 		patterns = {}
 		
 		# produce wxh standard square grid
+		pattern = ''
 		tile = ''
 		tile += "+---" * w + '+' + self.eol
 		tile += "|   " * w + '|'+ self.eol
@@ -937,6 +948,7 @@ class mazeify:
 		patterns['square'] = tile
 
 		# produce wxh micro square grid
+		pattern = ''
 		head = '_' + '_' * 2*w + self.eol
 		foot = ''
 		tile = '|_' * w +  '|'+ self.eol
@@ -944,16 +956,101 @@ class mazeify:
 		patterns['micro'] = pattern
 
 		# produce wxh block grid
+		pattern = ''
 		head = '#`' * (2*w+1) + self.eol
 		foot = head
 		tile = '#   ' * w +  '#'+ self.eol
 		pattern = (head + tile) * h + foot
 		patterns['block'] = pattern
 
-		#print pattern
+		# produce wxh oblique grid (left slant)
+		pattern = ''
+		head = '+---' * (w) + '+' + self.eol
+		foot = head
+		tile = '\\   ' * w +  '\\'+ self.eol
+		pattern = head
+		for i in xrange(h):
+			pattern += ' ' * (2*i+1) + tile
+			pattern += ' ' * (2*i+2) + foot
+		patterns['oblique'] = pattern
+
+		# produce wxh oblique grid (right slant)
+		pattern = ''
+		head = '+---' * (w) + '+' + self.eol
+		foot = head
+		tile = '/   ' * w +  '/'+ self.eol
+		pattern = ' ' * (2*h) + head
+		for i in xrange(h):
+			pattern += ' ' * (2*h-2*i-1) + tile
+			pattern += ' ' * (2*h-2*i-2) + foot
+		patterns['oblique2'] = pattern
+
+
+		# produce wxh hex grid 
+		pattern = ''
+		head  = ' __   ' * w + self.eol
+		tile  = '/  \__' * w + self.eol
+		foot  = '\__/  ' * w + self.eol
+		tile2 = '/  \__' * w + '/' + self.eol
+		foot2 = '\__/  ' * w + '\\' + self.eol
+		pattern = head
+		for i in xrange(h):
+			if i == 0:
+				pattern += tile
+			else:
+				pattern += tile2
+			if i == h-1:
+				pattern += foot
+			else:
+				pattern += foot2
+
+		patterns['hex'] = pattern
+
+
+		# produce wxh large hex grid 
+		pattern = ''
+		head  = '  ____      ' * w + self.eol
+		tile1 = ' /    \     ' * w + self.eol
+		tile2 = '/      \____' * (w-1) + '/      \\' + self.eol
+		tile3 = '\      /    ' * w + self.eol
+		tile4 = ' \____/     ' * w + self.eol
+
+		pattern = head
+		for i in xrange(h):
+			pattern += tile1
+			pattern += tile2
+			pattern += tile3
+			pattern += tile4
+		patterns['hex2'] = pattern
+
+		# produce wxh triangle grid 
+		tile0  = ' '*2 + '_' * (4*w -4) + self.eol
+		tile1  = ' /\ '  * (w) + self.eol
+		tile2  = '/__\\' * (w) + self.eol
+		tile3  = '\  /'  * (w) + self.eol
+		tile4  = ' \/_' + '_\/_' * (w-2) + '_\/ ' + self.eol
+		pattern = ''
+		pattern = tile0
+		for i in xrange(h/2):
+			pattern += tile1
+			pattern += tile2
+			pattern += tile3
+			pattern += tile4
+		patterns['triangle'] = pattern
+
+		# produce wxh small diamond grid 
+		pattern = ''
+		tile1 = '/\\' * w + self.eol
+		tile2 = '\\/' * w + self.eol
+		for i in xrange(h):
+			pattern += tile1
+			pattern += tile2
+		patterns['diamond'] = pattern
+
 
 		# add more tile patterns here ...
 
+		#print pattern
 		return patterns[type]
 
 
@@ -1065,34 +1162,37 @@ class mazeify:
 	# a temporary method for random testing
 	def kevtest(self):
 		self.use_microspace = False
+
+		self.tessellate(10,10,'oblique')
+
 		t =r'''
 
 a test template
 
 '''
 
-		self.parseTemplate(t,create_maze=False)
+		#self.parseTemplate(t,create_maze=False)
 
 		#points = self.findChar('\\')
 		#print points
-		block = self.getBlockAt(57,52,10,10)		
-		print block
+		#block = self.getBlockAt(57,52,10,10)		
+		#print block
 		#self.dump()
 		#print self.replace(['test','test'],['work','asdf'])
-		self.scan_diagonal = True
-		self.fill(x,y,'\\',' ')
+		#self.scan_diagonal = True
+		#self.fill(x,y,'\\',' ')
 		#self.dump()
-		print self.toString()
+		#print self.toString()
 
 		#print self.findPattern(['est','est'])
 		#print self.hasPatternAt(['test0','test1','test2'],2,1)
 
-#		for i in range(9*3):
-#			print "test",i	
-#			print self.toString(raw=True)
-#			self.setMacroChar(i,0,'|');
-#			print self.toString(raw=True)
-#			print "--"
+		#for i in range(9*3):
+		#	print "test",i	
+		#	print self.toString(raw=True)
+		#	self.setMacroChar(i,0,'|');
+		#	print self.toString(raw=True)
+		#	print "--"
 
 
 ## unused
@@ -1176,105 +1276,36 @@ if __name__ == '__main__':
 
 	# pass along cli options to maze
 	def apply_options(maze, options):
-		maze.scan_diagonal = options.zigzag
 		maze.debug = options.debug	
 		maze.thickness = int(options.thickness)
 		maze.length = int(options.length)
 		maze.scan_wall_space = not options.no_wall_scan
 		maze.dot_last_underscore = options.dot_last_underscore
 		maze.use_microspace = options.use_microspace
-		maze.close_implied_wall = options.close_implied_wall
+		maze.close_implied_wall = not options.no_close_implied_wall
+		maze.scan_diagonal = not options.no_zigzag
 		#maze.curviness = options.curviness
 
 
 	#  simple template parsing demos / regression tests
 	def demo(options):
 
+		default_parser = mazeify()
+		apply_options(default_parser,options)
+
 		# run through predefined regular shapes
 		if options.test == -1:
 			print "predefined tessellations"
-			types = ['block','square']
+			types = default_parser.maze_types
 			for maze_type in types: 
+				print "type: " + maze_type
 				options.maze = maze_type	
 				create_maze(options)
 			print "--"	
 
 		parsers = [] # custom parsing options
 		templates = [] # test templates
-	
-		template = r'''
-    Example: a basic grid
 
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+
-		|   |   |   |   |   |   |   |   |   |   |   |   |   |
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+
-		|   |   |   |   |   |   |   |   |   |   |   |   |   |
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+
-		|   |   |   |   |   |   |   |   |   |   |   |   |   |
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+
-		|   |   |   |   |   |   |   |   |   |   |   |   |   |
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+
-		|   |   |   |   |   |   |   |   |   |   |   |   |   |
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+
-		|   |   |   |   |   |   |   |   |   |   |   |   |   |
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+
-		|   |   |   |   |   |   |   |   |   |   |   |   |   |
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+
-		'''
-		templates.append(template)
-		parsers.append(None) # default parser
-
-#### test
-
-		template = r'''
-    Example: irregular cells, holes
-                                                              
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+ 
-		|               |   |   |   |   |   |   |   |   |   | 
-		|               +---+---+---+---+---+---+---+---+---+ 
-		|               |   |   |   |   |   |   |   |   |   | 
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+ 
-		|   |   |   |   |   |   |   |   |   |               | 
-		+---+---+---+---+---+---+---+---+---+               + 
-		|   |   |   |   |   |   |   |   |   |               | 
-		+---+---+---+---+---+---+---+---+---+---+---+---+---+ 
-                                                               
-		'''
-		templates.append(template)
-		parsers.append(None) # default parser
-
-
-#### test
-
-		template = r'''
-    Example: oblique
-
-                  +---+---+---+---+---+---+---+---+---+---+---+ 
-                 /   /   /   /   /   /   /   /   /   /   /   / 
-                +---+---+---+---+---+---+---+---+---+---+---+ 
-               /   /   /   /   /   /   /   /   /   /   /   / 
-              +---+---+---+---+---+---+---+---+---+---+---+ 
-             /   /   /   /   /   /   /   /   /   /   /   / 
-            +---+---+---+---+---+---+---+---+---+---+---+ 
-           /   /   /   /   /   /   /   /   /   /   /   / 
-          +---+---+---+---+---+---+---+---+---+---+---+ 
-         /   /   /   /   /   /   /   /   /   /   /   / 
-        +---+---+---+---+---+---+---+---+---+---+---+ 
-       /   /   /   /   /   /   /   /   /   /   /   / 
-      +---+---+---+---+---+---+---+---+---+---+---+ 
-     /   /   /   /   /   /   /   /   /   /   /   / 
-    +---+---+---+---+---+---+---+---+---+---+---+ 
-   /   /   /   /   /   /   /   /   /   /   /   / 
-  +---+---+---+---+---+---+---+---+---+---+---+ 
- /   /   /   /   /   /   /   /   /   /   /   / 
-+---+---+---+---+---+---+---+---+---+---+---+ 
-
-		'''
-
-		templates.append(template)
-		parsers.append(None) # default parser
-
-#### test
 
 		template = r"""
     Example: mixed tessellations are also possible
@@ -1372,139 +1403,7 @@ if __name__ == '__main__':
 		parsers.append(maze)
 
 
-#### test
-
-		template = r"""
-
-translate implied whitespace 
-with microspace parsing
-  __    __    __    __    __    __  
- /  \__/  \__/  \__/  \__/  \__/  \ 
- \__/  \__/  \__/  \__/  \__/  \__/ 
- /  \__/  \__/  \__/  \__/  \__/  \ 
- \__/  \__/  \__/  \__/  \__/  \__/ 
- /  \__/  \__/  \__/  \__/  \__/  \ 
- \__/  \__/  \__/  \__/  \__/  \__/ 
- /  \__/  \__/  \__/  \__/  \__/  \ 
- \__/  \__/  \__/  \__/  \__/  \__/ 
- /  \__/  \__/  \__/  \__/  \__/  \ 
- \__/  \__/  \__/  \__/  \__/  \__/ 
- /  \__/  \__/  \__/  \__/  \__/  \ 
- \__/  \__/  \__/  \__/  \__/  \__/ 
- /  \__/  \__/  \__/  \__/  \__/  \ 
- \__/  \__/  \__/  \__/  \__/  \__/ 
-                                    
-"""	
-	
-		templates.append(template)
-		# tune parser: set explicit wall length
-		maze = mazeify()
-		apply_options(maze,options)
-		maze.use_microspace = True  
-		parsers.append(maze)
-
-#### test
-
-		template = r"""
-
-triangles - implied whitespace
-using sloppy connectors: /_  and _\
-
-    ____________________________
-    \  /\  /\  /\  /\  /\  /\  / 
-     \/__\/__\/__\/__\/__\/__\/  
-     /\  /\  /\  /\  /\  /\  /\
-    /__\/__\/__\/__\/__\/__\/__\ 
-    \  /\  /\  /\  /\  /\  /\  / 
-     \/__\/__\/__\/__\/__\/__\/  
-     /\  /\  /\  /\  /\  /\  /\  
-    /__\/__\/__\/__\/__\/__\/__\ 
-    \  /\  /\  /\  /\  /\  /\  / 
-     \/__\/__\/__\/__\/__\/__\/  
-      \  /\  /\  /\  /\  /\  / 
-       \/__\/__\/__\/__\/__\/    
-       /\/\/\/\/\/\/\/\/\/\/\
-       \/\/\/\/\/\/\/\/\/\/\/
-       /\/\/\/\/\/\/\/\/\/\/\
-       \/\/\/\/\/\/\/\/\/\/\/
-       /\/\/\/\/\/\/\/\/\/\/\
-       \/\/\/\/\/\/\/\/\/\/\/
-       /\/\/\/\/\/\/\/\/\/\/\
-       \/\/\/\/\/\/\/\/\/\/\/
-       /\/\/\/\/\/\/\/\/\/\/\
-       \/\/\/\/\/\/\/\/\/\/\/
-       /\/\/\/\/\/\/\/\/\/\/\
-       \/\/\/\/\/\/\/\/\/\/\/
-        \/\/\/\/\/\/\/\/\/\/
-"""	
-
-		maze = mazeify()
-		apply_options(maze,options)
-		#maze.length = 1
-		maze.scan_diagonal = True
-		maze.use_microspace = True  
-		maze.close_implied_wall = True
-
-		parsers.append(maze)
-		templates.append(template)
-	
-
-#### test
-
-		template = r"""
-micro template example
-
-note: contains no actual 
-      whitespace
- ___________________________ 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
- |_|_|_|_|_|_|_|_|_|_|_|_|_| 
-
-"""	
-
-# smaller template for quicker render
-		
-		template_alt = r"""
-_________________ 
-|_|_|_|_|_|_|_|_| 
-|_|_|_|_|_|_|_|_| 
-|_|_|_|_|_|_|_|_| 
-|_|_|_|_|_|_|_|_| 
-|_|_|_|_|_|_|_|_| 
-
-_________________ 
-|_|_|_|_|_|_|_|_| 
-|_|_|_|_|_|_|_|_| 
-|_|_|_|   |_|_|_| 
-|_|_|_| ~ |_|_|_| 
-|_|_|_|___|_|_|_| 
-
-"""	
-	
-	
-		templates.append(template)
-
-		# tune parser: set explicit wall length
-		maze = mazeify()
-		apply_options(maze,options)
-		#maze.length = 1
-		maze.use_microspace = True  
-		maze.close_implied_wall = True  
-		#maze.dot_last_underscore = True   # sharpen corners _ -> _.
-		parsers.append(maze)
-
-
-
-#### test
+#### test 
 
 		template = r"""
 
@@ -1620,8 +1519,6 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 		print "Here's a quick demo using templates" 
 		print ""
 
-		default_parser = mazeify()
-		apply_options(default_parser,options)
 
 		for idx,template in enumerate(templates):
 			parser = parsers[idx]
@@ -1644,6 +1541,7 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 				print parser.toString(True).rstrip()
 
 			out = parser.toString()
+			parsers[idx] = None # garbage collect
 			print ""
 			print "rendered output:"
 			print ""
@@ -1668,12 +1566,16 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 		# parsing hints
 		hints = { 
 			'micro': {
-				'length': 1,
-				'close_implied_wall': True,
 				'use_microspace': True,
 			},
 			'block': {
 				'length': 1,
+			},
+			'triangle': {
+				'use_microspace': True,
+			},
+			'diamond': {
+				'use_microspace': True,
 			},
 		}
 		if options.maze in hints:
@@ -1701,12 +1603,12 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 		dest='thickness', help='wall thickness', default=1)
 	parser.add_option('-l','--length', action='store', dest='length', type="int",
 		help="max wall segment length", default=-1)
-	parser.add_option('-z', '--zigzag', action='store_true', dest='zigzag',
-		help='allow diagonal scanning', default=False)
+	parser.add_option('-z', '--no-zigzag', action='store_true', dest='no_zigzag',
+		help='Do not break diagonally joined walls', default=False)
 	parser.add_option('-W', '--width', action='store', dest='width', type="int",
-		help='width', default=19)
+		help='width', default=15)
 	parser.add_option('-H', '--height', action='store', dest='height', type="int",
-		help='height', default=20)
+		help='height', default=15)
 	parser.add_option('-m', '--maze', action='store', dest='maze',
 		help='create a basic maze. options: square', default='')
 
@@ -1721,8 +1623,8 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 	parser.add_option('--dot-last-underscore', action='store_true', dest='dot_last_underscore',
 		help='add a dot . decorator to last underscore in a segment.', default=False)
 
-	parser.add_option('--close-implied-wall', action='store_true', dest='close_implied_wall',
-		help='preserve implied horizontal walls _|_/_\\_  -> ______', default=False)
+	parser.add_option('--no-close-implied-wall', action='store_true', dest='no_close_implied_wall',
+		help='do not preserve implied horizontal walls _|_/_\\_  -> ______', default=False)
 
 #	parser.add_option('-c', '--curviness', action='store', dest='curviness', type="int",
 #		help='curviness [0,100]', default=100)
