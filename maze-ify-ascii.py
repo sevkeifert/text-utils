@@ -806,17 +806,26 @@ class mazeify:
 				print "**** imagePostProcess complete ****"
 
 
-	# return a random set of deltas, corrected for bias (least used first)
+	# return a random set of deltas, corrected for bias.
+	# put least used first, most used last.
 	def getDeltas(self):
 	
 		deltas = list(self.deltas) # make a random copy
 		shuffle(deltas)
 
 		if len(self.bias) > 0:
+			# help even the scales
 			# put least used up front
 			rare = min(self.bias, key=self.bias.get)
 			deltas.remove(rare)
-			deltas = [rare] + deltas;
+			deltas = [rare] + deltas
+
+			# most used goes to end
+			notrare = max(self.bias, key=self.bias.get)
+			if notrare != rare:
+				deltas.remove(notrare)
+				deltas =  deltas + [notrare];
+			deltas.remove(notrare)
 
 		return deltas;
 
@@ -840,10 +849,6 @@ class mazeify:
 		deltas = self.getDeltas() 
 		for delta in deltas:
 
-			if not (delta in self.bias):
-				self.bias[delta] = 1
-			else:
-				self.bias[delta] += 1
 	
 			(dx,dy) = delta
 
@@ -884,6 +889,13 @@ class mazeify:
 
 			if scan == self.unvisited:
 				# hit paydirt, inside a new room
+
+				# record walk pattern
+				if not (delta in self.bias):
+					self.bias[delta] = 1
+				else:
+					self.bias[delta] += 1
+
 				changed = []
 
 				# knock down wall.  note: must use a delimiter/change
