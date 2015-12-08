@@ -1565,16 +1565,19 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 
 		# parsing hints
 		hints = { 
-			'micro': {
-				'use_microspace': True,
-			},
 			'block': {
 				'length': 1,
 			},
-			'triangle': {
+			'diamond': {
 				'use_microspace': True,
 			},
-			'diamond': {
+			'hex': {
+				'use_microspace': True,
+			},
+			'micro': {
+				'use_microspace': True,
+			},
+			'triangle': {
 				'use_microspace': True,
 			},
 		}
