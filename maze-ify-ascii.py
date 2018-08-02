@@ -157,7 +157,7 @@ class mazeify:
 
 			'_' :
 					[ '   ' ,
-					  ' _ ' , # center is id
+					  '   ' , # exception: bottom center is id
 					  '___' ],
 
 			'-' :
@@ -266,6 +266,14 @@ class mazeify:
 	def getMacroCharIdPos(self,x,y):
 		# snap to first multiple of 3	
 		(x0,y0) = self.getMacroCharTopLeftPos(x,y)
+
+		# check special case: _ (bottom center)
+		(x1,y1) = (x0+1,y0+2)  
+		c1 = self.get(x1,y1)
+		if c1 == '_':
+			return (x1,y1) 
+
+		# default: else return middle center
 		return (x0+1,y0+1)
 
 
@@ -276,9 +284,14 @@ class mazeify:
 			return ''
 
 		(x0,y0) = self.getMacroCharIdPos(x,y)
-		return self.get(x0,y0)
 
-		return c
+		# translate space flags
+		c0 = self.get(x0,y0)
+		if c0 in [self.visited,self.unvisited]:
+			return self.space
+
+		# return char at pos 
+		return c0
 
 
 	# set value at board at x,y
@@ -1129,28 +1142,21 @@ class mazeify:
 	# 9-cell -> 1-cell for entire string.
 	def inverse_transform(self, transform):
 
-		#slice off top, bottom
-		lines = transform.split(self.eol2)
-		lines = lines[self.pad : -self.pad]
-		t2 = ''
-		for line in lines:
-			#slice off left, right
-			t2 += line[self.pad : -self.pad] + self.eol2
-		transform = t2
-
 		# compress 9-cell -> 1-cell
 		if self.use_microspace:
 			t2 = ''
 			lines = transform.split(self.eol2)
 			for y,row in enumerate(lines):
-				if(y%3) == 1: # center of row
+				if(y%3) == 0: # top of row block
 					for x, c in enumerate(row):
-						if (x%3) == 1: # center of cells
-							t2 += c
+						if (x%3) == 0: # top of cell block
+							cm = self.getMacroCharValue(x,y)
+							#print x,y,c, '->',cm
+							t2 += cm
 					t2 += self.eol2
 			transform = t2
 
-		return t2
+		return transform
 
 
 	# print board with all x,y indexes, for debugging
