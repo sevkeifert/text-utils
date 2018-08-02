@@ -484,64 +484,6 @@ class mazeify:
 			print(self.toString(raw=True))
 
 
-	# deprecated.  use non-recursive self.fillPoints() instead.
-	# fill region with a char, finding pattern and replacing.
-	def fillRecursive(self,x,y,find,replace,level=0,data=None):
-
-		if data == None:
-			data = []
-
-		if level == 0:
-			if len(find) != len(replace):
-				print('Warn: lengths differ. "'+find+'" -> "'+replace+'"')
-			if find == replace:
-				print('Warn: same find == replace: '+find)
-				return data;
-		else:
-			if (x,y) in data:
-				#we've already checked this space
-				return data
-
-		if self.debug:
-			print('fill pre', x, y, find, replace, level)
-			print("macro id ", self.getMacroCharIdPos(x,y), self.getMacroCharValue(x,y))
-			print(self.toString(True))
-
-		# what wall directions will be scanned in ASCII template?
-		# note: these are returned by reference
-		if self.scan_diagonal and find in self.walls_diagonal:
-			deltas = self.zdeltas # break diagonal wall patterns
-		else:
-			deltas = self.deltas # zdelta won't detect X whitespace boundaries
-
-		c = self.get(x,y)
-
-		if c == find: # hit
-			if self.use_microspace:
-				changed = self.setMacroChar(x,y,replace)
-				data += changed
-			else:	
-				self.set(x,y,replace)
-				data.append((x,y))
-
-			if self.length != -1 and len(data) >= self.length and c in self.walls:
-				# end. maxed out wall segment
-				return data	
-
-			else:
-				# recursively scan neighbors
-				for (dx,dy) in deltas:
-					x2 = x + dx
-					y2 = y + dy
-					if self.inBounds(x2,y2) and not ( (x2,y2) in data):
-						self.fill(x2,y2,find,replace,level+1,data)			
-		if self.debug:
-			print('fill post', x, y, find, replace, level)
-			print(self.toString(True))
-
-		return data
-
-
 	# fill region with char, finding pattern and replacing.  (like
 	# "fill polygon" in a paint program, finds boundaries) this is
 	# a replacement for self.fillRecursive(), where the old function
@@ -1125,16 +1067,6 @@ class mazeify:
 			template2 += top_bottom
 
 
-		# deprecated.  use self.replace or imagePreProcess instead.
-		##tighted edges in 9-cell rendering (ignore some microspace)
-		#tighten = [
-		#			('/  _', '/++_'),    # /_
-		#			('_  \\', '_++\\')   # _\
-		#		]
-
-		#for (find,replace) in tighten:
-		#	template2 = template2.replace(find,replace)
-
 		return template2
 
 
@@ -1202,77 +1134,6 @@ a test template
 		#	print "--"
 
 
-## unused
-#	# set value(s) at board at x,y, in macro space
-#	def setMacroChar(self,x,y,value):
-#		
-#		# set entire 9-grid, find upper left
-#		(x0, y0) = self.getMacroCharTopLeftPos(); 
-#		chars = self.getMacroCharMap(value)
-#		for i in range(3):
-#			for j in range(3):
-# 				c = chars[i][j];
-#				if ( c != self.unvisited ):
-#					self.set(x0+j,y0+1,c)
-#
-#
-#	# collision detection
-#	def getMacroCharChanges(self,x,y,value):
-#		# 9 cell -> 1 cell conversion
-#		(x0,y0) = self.getMacroCharTopLeftPos(x,y)
-#		diff = []
-#		chars = self.getMacroCharMap(c)
-#		for i in range(3):
-#			for j in range(3):
-#				c1 = chars[i][j] # should be
-#				c2 = self.get(x0+j,y0+1) # is
-#				if ( c1 != ' ' and c1 != c2 ):
-#					# char has changed, add to diff
-#					diff.append(x0+j,y0+1)
-#		return diff
-#
-#
-#	# vertical walls are also implied horizonal boundaries.  for example:
-#	# breaking "|_" will result in " _".
-#	# this method can transform vertical wall breaks to _
-#	def getReplaceChar(self,x,y,dx,dy,char):
-#
-#		#return self.unvisited # to disable
-#
-#		# ignore implied horizonal walls
-#		if not self.close_implied_wall:
-#			return self.unvisited
-#
-#		if not (char in self.walls_vert):
-#			return self.unvisited 
-#
-#		c1 = ''
-#		c2 = ''
-#		if self.use_microspace:
-#			# TODO: test this more
-#			# look at macro char primary value only	
-#			char = self.getMacroCharValue(x,y)
-#			c1 = self.getMacroCharValue(x+3,y)
-#			c2 = self.getMacroCharValue(x-3,y)
-#		else:
-#			c1 = self.get(x-1,y)
-#			c2 = self.get(x+1,y)
-#
-#		# check horizontal neighbors directly
-#		# transform from  \_, |_, /_  to  __
-#		if '_' in [c1,c2]:
-#			return '_'
-#
-#		# default		
-#		return self.unvisited
-#
-#
-#	# return a set of all wall charactuers used in a string template
-#	def getWallCharsUsed(self,string):
-#		walls = Set([])
-#		for c in string:
-#			if c in self.walls and not (c in chars):
-#				walls.add(c)	
 
 # end class
 
