@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 #
+# This is written for Python 2.x.
+# For Python 3.x, see maze-ify-ascii-v3.py
+#
 # Kevin Seifert - GPL v2 2015
 #
 # This script turns an ASCII tessellation into a maze.
