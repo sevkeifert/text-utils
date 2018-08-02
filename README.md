@@ -21,6 +21,8 @@ maze.py
 
 maze-ify-ascii.py
 > This script turns an ASCII tessellation into a maze.  The class includes methods for graphically manipulating text data, such as fill, 2D find/replace, parsing space withing character cell, edge filters, and interior/exterior detection of closed shapes.
+
+Note: maze-ify-ascii.py is written for Python 2.x.  maze-ify-ascii-v3.py has been ported to Python 3.x.
  
 svi
 > secure vi text editor - to allow editing/viewing AES encrypted files from the command line.  (Bash script)
