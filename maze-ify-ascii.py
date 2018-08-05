@@ -3,7 +3,7 @@
 # This is written for Python 2.x.
 # For Python 3.x, see maze-ify-ascii-v3.py
 #
-# Kevin Seifert - GPL v2 2015
+# Kevin Seifert - GPL v2 2018
 #
 # This script turns an ASCII tessellation into a maze.
 #
@@ -362,7 +362,7 @@ class mazeify:
 		for y,row in enumerate(self.board):
 			for x,c in enumerate(row):
 				if c == find:
-				 	points.append((x,y))	
+					points.append((x,y))	
 
 		return points
 
@@ -371,7 +371,7 @@ class mazeify:
 	# return True if all chars in a 'find' pattern are set.  can
 	# scan multiple rows.  
 	# 'find' is an array of strings. for example:
-	# 	['row1','row2']
+	#	['row1','row2']
 	def hasPatternAt(self, find, x, y):
 
 		h = len(find)
@@ -403,8 +403,8 @@ class mazeify:
 	# like self.findChar(), but accepts a pattern that may span
 	# multiple rows.  
 	# For example to find:
-	# 	hello
-	# 	there
+	#	hello
+	#	there
 	# search for: 
 	#	['hello','there']
 	# patterns must be rectangular.
@@ -787,7 +787,7 @@ class mazeify:
 
 
 	# scan the entire ASCII map, build the maze
- 	def createMaze(self):
+	def createMaze(self):
 
 		if self.use_microspace:
 			self.imagePreProcess()
@@ -808,13 +808,13 @@ class mazeify:
 			for x in xrange(xstart,w):
 				c = self.get(x,y)
 				if c == self.unvisited:
-				 	self.walk(x,y,0,data)	
+					self.walk(x,y,0,data)	
 
 		# scan all cells
 		for y,row in enumerate(self.board):
 			for x,c in enumerate(row):
 				if c == self.unvisited:
-				 	self.walk(x,y,0,data)	
+					self.walk(x,y,0,data)	
 
 		if self.use_microspace:
 			self.imagePostProcess()
@@ -875,7 +875,7 @@ class mazeify:
 			finished = False	
 			scan = ''
 
-			# look past walls for unvisited rooms 		
+			# look past walls for unvisited rooms	
 			path = []
 			walls = []
 			wall = ''
@@ -1204,78 +1204,6 @@ a test template
 		#	print self.toString(raw=True)
 		#	print "--"
 
-
-## unused
-#	# set value(s) at board at x,y, in macro space
-#	def setMacroChar(self,x,y,value):
-#		
-#		# set entire 9-grid, find upper left
-#		(x0, y0) = self.getMacroCharTopLeftPos(); 
-#		chars = self.getMacroCharMap(value)
-#		for i in range(3):
-#			for j in range(3):
-# 				c = chars[i][j];
-#				if ( c != self.unvisited ):
-#					self.set(x0+j,y0+1,c)
-#
-#
-#	# collision detection
-#	def getMacroCharChanges(self,x,y,value):
-#		# 9 cell -> 1 cell conversion
-#		(x0,y0) = self.getMacroCharTopLeftPos(x,y)
-#		diff = []
-#		chars = self.getMacroCharMap(c)
-#		for i in range(3):
-#			for j in range(3):
-#				c1 = chars[i][j] # should be
-#				c2 = self.get(x0+j,y0+1) # is
-#				if ( c1 != ' ' and c1 != c2 ):
-#					# char has changed, add to diff
-#					diff.append(x0+j,y0+1)
-#		return diff
-#
-#
-#	# vertical walls are also implied horizonal boundaries.  for example:
-#	# breaking "|_" will result in " _".
-#	# this method can transform vertical wall breaks to _
-#	def getReplaceChar(self,x,y,dx,dy,char):
-#
-#		#return self.unvisited # to disable
-#
-#		# ignore implied horizonal walls
-#		if not self.close_implied_wall:
-#			return self.unvisited
-#
-#		if not (char in self.walls_vert):
-#			return self.unvisited 
-#
-#		c1 = ''
-#		c2 = ''
-#		if self.use_microspace:
-#			# TODO: test this more
-#			# look at macro char primary value only	
-#			char = self.getMacroCharValue(x,y)
-#			c1 = self.getMacroCharValue(x+3,y)
-#			c2 = self.getMacroCharValue(x-3,y)
-#		else:
-#			c1 = self.get(x-1,y)
-#			c2 = self.get(x+1,y)
-#
-#		# check horizontal neighbors directly
-#		# transform from  \_, |_, /_  to  __
-#		if '_' in [c1,c2]:
-#			return '_'
-#
-#		# default		
-#		return self.unvisited
-#
-#
-#	# return a set of all wall charactuers used in a string template
-#	def getWallCharsUsed(self,string):
-#		walls = Set([])
-#		for c in string:
-#			if c in self.walls and not (c in chars):
-#				walls.add(c)	
 
 # end class
 
@@ -1610,7 +1538,7 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 
 	# main ...
 	sys.setrecursionlimit(100000)
- 	# parse cli options, parsing hints
+	# parse cli options, parsing hints
 	parser = optparse.OptionParser()
 
 	parser.add_option('-f', '--file', action='store', dest='filename',
@@ -1653,7 +1581,7 @@ start   __/  \__/  \__/  \__/  \__/  \__/  \__/  \__
 	options, args = parser.parse_args()
 
 	if options.unittest:
-	 	maze = mazeify()
+		maze = mazeify()
 		apply_options(maze,options)
 		maze.unittest()	
 

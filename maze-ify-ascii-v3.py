@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Kevin Seifert - GPL v2 2015
+# Kevin Seifert - GPL v2 2018
 #
 # This script turns an ASCII tessellation into a maze.
 #
